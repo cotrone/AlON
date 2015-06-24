@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module ALON.Source (
     DirTree
   , dirSource
@@ -36,9 +36,9 @@ data DataUpdate =
   | DataDel [FP.FilePath]
   deriving (Eq, Ord, Show)
 
-dirSource :: FP.FilePath -> IO (Event Spider [DataUpdate])
+dirSource :: MonadReflexCreateTrigger Spider m => FP.FilePath -> m (Event Spider [DataUpdate])
 dirSource dir = do
-  newEventWithTriggerIO $ \et -> do
+  newEventWithTrigger $ \et -> do
     t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m -> do
       eq <- newTQueueIO
       -- Start listening for changes to the directory, feeding it to us via STM due to issues of isEmptyChan.
