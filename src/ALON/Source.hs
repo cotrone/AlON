@@ -23,7 +23,6 @@ import Data.Conduit.Combinators (sourceDirectoryDeep)
 import qualified Control.Exception as E
 import Reflex
 import Reflex.Host.Class
-import Reflex.Spider.Internal (newEventWithTriggerIO)
 import Data.Dependent.Sum (DSum ((:=>)))
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -36,8 +35,8 @@ data DataUpdate =
   | DataDel [FP.FilePath]
   deriving (Eq, Ord, Show)
 
-dirSource :: MonadReflexCreateTrigger Spider m => FP.FilePath -> m (Event Spider [DataUpdate])
-dirSource dir = do
+dirSource :: MonadReflexCreateTrigger Spider m => TQueue (DSum (EventTrigger Spider)) -> FP.FilePath -> m (Event Spider [DataUpdate])
+dirSource q dir = do
   newEventWithTrigger $ \et -> do
     t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m -> do
       eq <- newTQueueIO
@@ -48,11 +47,11 @@ dirSource dir = do
       pre <- atomically . whileM (not <$> isEmptyTQueue eq) $ readTQueue eq
       -- We have to convert the stable read to update events, overlay the changes as events, and emit a big event.
       pres <- mapM e2e pre
-      runSpiderHost $ fireEvents [et :=> pres]
+      atomically . writeTQueue q $ et :=> pres
       -- Then we just watch the changes, and send them on
       forever . E.handle (\(e::E.SomeException) -> print e) $ do
         e <- atomically (readTQueue eq) >>= e2e
-        runSpiderHost $ fireEvents [et :=> [e]]
+        atomically . writeTQueue q $ et :=> [e]
     return (killThread t)
   where
     e2e :: FSN.Event -> IO DataUpdate
