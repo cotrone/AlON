@@ -39,3 +39,16 @@ library
       , conduit == 1.2.*
       , conduit-combinators
       , resourcet == 1.1.*
+
+executable test
+  default-language:    Haskell2010
+  main-is:             Main.hs
+  build-depends:
+        base >=4.8 && <4.9
+      , ALON
+      , stm
+      , mtl
+      , dependent-sum
+      , reflex == 0.2.*
+      , list-tries == 0.6.*
+      , system-filepath == 0.4.*
