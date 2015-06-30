@@ -49,6 +49,7 @@ executable test
       , stm
       , mtl
       , dependent-sum
+      , time
       , reflex == 0.2.*
       , list-tries == 0.6.*
       , system-filepath == 0.4.*
