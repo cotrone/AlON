@@ -39,6 +39,7 @@ library
       , conduit == 1.2.*
       , conduit-combinators
       , resourcet == 1.1.*
+      , time == 1.5.*
 
 executable test
   default-language:    Haskell2010

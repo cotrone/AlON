@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module ALON.Source (
-    DirTree, DataUpdate(..)
+    time
+  , DirTree, DataUpdate(..)
   , dirSource
   ) where
 
@@ -27,6 +28,18 @@ import Data.Dependent.Sum (DSum ((:=>)))
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TQueue
+import Data.Time
+
+time :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m) => TQueue (DSum (EventTrigger Spider)) -> DiffTime -> m (Behavior Spider UTCTime)
+time q dt = do
+  e <- newEventWithTrigger $ \et -> do
+    t <- forkIO . forever $ do
+           getCurrentTime >>= (atomically . writeTQueue q . (et :=>))
+           -- This drifts. Not considered a problem for its intended use.
+           threadDelay . floor $ dt*(10^6)
+    return $ killThread t
+  now <- liftIO getCurrentTime
+  hold now e
 
 type DirTree a = TrieMap FP.FilePath a
 
@@ -35,7 +48,7 @@ data DataUpdate =
   | DataDel [FP.FilePath]
   deriving (Eq, Ord, Show)
 
-dirSource :: MonadReflexCreateTrigger Spider m => TQueue (DSum (EventTrigger Spider)) -> FP.FilePath -> m (Event Spider [DataUpdate])
+dirSource :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m) => TQueue (DSum (EventTrigger Spider)) -> FP.FilePath -> m (Event Spider [DataUpdate])
 dirSource q dir = do
   newEventWithTrigger $ \et -> do
     t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m ->
