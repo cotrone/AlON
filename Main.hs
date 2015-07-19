@@ -22,12 +22,14 @@ main = runSpiderHost $ do
   o <- runHostFrame $ do
     et <- time eq 0.1
     dt <- dirSource eq "test_dir" >>= hold []
-    return dt
+    return et
 
   forever $ do
     e <- liftIO . atomically $ readTQueue eq
-    fireEventsAndRead [e] (return ())
-    r <- sample o
+    eh <- subscribeEvent . updated $ o
+    oc <- fireEventsAndRead [e] (isJust <$> (readEvent eh))
+    r <- sample (current o)
+    liftIO $ print oc
     liftIO $ print r
 
   return ()
