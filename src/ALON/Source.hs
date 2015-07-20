@@ -48,21 +48,16 @@ data DataUpdate =
   | DataDel
   deriving (Eq, Ord, Show)
 
-dirSource :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m, MonadFix m) 
-          => TQueue (DSum (EventTrigger Spider)) 
+dirSource :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m, MonadFix m)
+          => TQueue (DSum (EventTrigger Spider))
           -> FP.FilePath -> m (Dynamic Spider (DirTree (Dynamic Spider ByteString)))
 dirSource eq dir = do
-    initSMV <- liftIO newEmptyMVar
     de <- newEventWithTrigger $ \et -> do
       t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m -> do
         E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
           wq <- newTQueueIO
           -- Start listenin before we read the dir
           void . FSN.watchTree m dir (const True) $ atomically . writeTQueue wq
-          -- Get an initial read of the directory, consistency issues will be recovered by inotify
-          -- (In the same sense as "eventual consistency sadly)
-          ifs <- readDb
-          putMVar initSMV ifs
           -- Then we just watch the changes, and send them on
           forever . E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
             e <- atomically (readTQueue wq) >>= e2e
@@ -77,7 +72,7 @@ dirSource eq dir = do
                (fp, DataDel) -> return . LT.delete fp $ t
                (fp, DataMod _) | LT.member fp t -> return t -- It'll update its self.
                (fp, DataMod d) | otherwise -> (\v -> LT.insert fp v t) <$> doDyn fp d
-    initS <- liftIO . readMVar $ initSMV
+    initS <- liftIO readDb
     initDir <- foldM (flip doDirTree) mempty initS
     foldDynM doDirTree initDir de
   where

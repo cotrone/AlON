@@ -58,3 +58,5 @@ executable test
       , reflex == 0.2.*
       , list-tries == 0.6.*
       , system-filepath == 0.4.*
+      , bytestring
+      , monad-loops == 0.4.*

@@ -7,24 +7,47 @@ import ALON.Source
 import Reflex
 import Reflex.Host.Class
 import Control.Concurrent.STM
+import Data.Dependent.Sum (DSum)
+import Data.ByteString (ByteString)
+import Control.Monad.Loops
+import qualified Filesystem.Path as FP
+import qualified Data.ListTrie.Patricia.Map.Ord as LT
 
 import Data.Maybe
 
-main :: IO ()
-main = runSpiderHost $ do
+type SiteResult = Dynamic Spider (DirTree (Dynamic Spider ByteString))
+
+type AlONSite = TQueue (DSum (EventTrigger Spider)) -> HostFrame Spider SiteResult
+
+type UpdateSite = [FP.FilePath] -> ByteString -> IO ()
+
+type SetupSite = DirTree ByteString -> IO ()
+
+runSite :: SetupSite -> UpdateSite -> AlONSite -> IO ()
+runSite setup up frm = runSpiderHost $ do
   eq <- liftIO newTQueueIO
 
-  o <- runHostFrame $ do
-    --et <- time eq 1
-    dt <- dirSource eq "test_dir"
-    return dt
+  o <- runHostFrame . frm $ eq
+
+  pre <- liftIO . atomically . whileM (not <$> isEmptyTQueue eq) $ readTQueue eq
+  fireEvents pre
+  fstate <- (sample . current $ o) >>= mapM (sample . current)
+  liftIO . setup $ fstate
 
   void . forever $ do
     e <- liftIO . atomically $ readTQueue eq
-    eh <- subscribeEvent . updated $ o
-    oc <- fireEventsAndRead [e] (isJust <$> (readEvent eh))
-    r <- sample (current o)
+    outer <- sample . current $ o
+    eh <- mapM (subscribeEvent . updated) $ outer 
+    oc <- fireEventsAndRead [e] $ do
+                     oces <- LT.mapMaybe id <$> mapM readEvent eh
+                     mapM id oces
     liftIO . print $ oc
-    liftIO . print . fmap (const ()) $ r
 
-  return ()
+main :: IO ()
+main =
+    runSite print (const $ const $ return ()) frm
+  where
+    frm eq = do
+      --et <- time eq 1
+      dt <- dirSource eq "test_dir"
+      return dt
