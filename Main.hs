@@ -13,13 +13,11 @@ import Control.Monad.Loops
 import qualified Filesystem.Path as FP
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 
-import Data.Maybe
-
 type SiteResult = Dynamic Spider (DirTree (Dynamic Spider ByteString))
 
 type AlONSite = TQueue (DSum (EventTrigger Spider)) -> HostFrame Spider SiteResult
 
-type UpdateSite = [FP.FilePath] -> ByteString -> IO ()
+type UpdateSite = [([FP.FilePath], ByteString)] -> IO ()
 
 type SetupSite = DirTree ByteString -> IO ()
 
@@ -41,11 +39,11 @@ runSite setup up frm = runSpiderHost $ do
     oc <- fireEventsAndRead [e] $ do
                      oces <- LT.mapMaybe id <$> mapM readEvent eh
                      mapM id oces
-    liftIO . print $ oc
+    liftIO . up . LT.toList $ oc
 
 main :: IO ()
 main =
-    runSite print (const $ const $ return ()) frm
+    runSite print (mapM_ print) frm
   where
     frm eq = do
       --et <- time eq 1
