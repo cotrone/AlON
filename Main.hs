@@ -35,10 +35,11 @@ runSite setup up frm = runSpiderHost $ do
   void . forever $ do
     e <- liftIO . atomically $ readTQueue eq
     outer <- sample . current $ o
-    eh <- mapM (subscribeEvent . updated) $ outer 
+    eh <- mapM (subscribeEvent . updated) $ outer
     oc <- fireEventsAndRead [e] $ do
                      oces <- LT.mapMaybe id <$> mapM readEvent eh
                      mapM id oces
+    liftIO . putStrLn $ "Events"
     liftIO . up . LT.toList $ oc
 
 main :: IO ()

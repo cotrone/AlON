@@ -58,6 +58,7 @@ dirSource eq dir = do
           wq <- newTQueueIO
           -- Start listenin before we read the dir
           void . FSN.watchTree m dir (const True) $ atomically . writeTQueue wq
+          putStrLn "Active"
           -- Then we just watch the changes, and send them on
           forever . E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
             e <- atomically (readTQueue wq) >>= e2e
@@ -72,6 +73,7 @@ dirSource eq dir = do
                (fp, DataDel) -> return . LT.delete fp $ t
                (fp, DataMod _) | LT.member fp t -> return t -- It'll update its self.
                (fp, DataMod d) | otherwise -> (\v -> LT.insert fp v t) <$> doDyn fp d
+    -- Place de has to be active by.
     initS <- liftIO readDb
     initDir <- foldM (flip doDirTree) mempty initS
     foldDynM doDirTree initDir de
