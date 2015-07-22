@@ -58,7 +58,6 @@ dirSource eq dir = do
           wq <- newTQueueIO
           -- Start listenin before we read the dir
           void . FSN.watchTree m dir (const True) $ atomically . writeTQueue wq
-          putStrLn "Active"
           -- Then we just watch the changes, and send them on
           forever . E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
             e <- atomically (readTQueue wq) >>= e2e
