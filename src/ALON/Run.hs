@@ -3,7 +3,6 @@ module ALON.Run (
   , runSite
   ) where
 
-import Data.Maybe
 import Control.Monad
 import Control.Monad.Trans
 import ALON.Source
@@ -13,7 +12,7 @@ import Control.Concurrent.STM
 import Data.Dependent.Sum (DSum)
 import Data.ByteString (ByteString)
 import Control.Monad.Loops
-import qualified Filesystem.Path as FP
+import qualified System.FilePath as FP
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 
 type SiteResult = Dynamic Spider (DirTree (Dynamic Spider ByteString))
