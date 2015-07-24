@@ -82,11 +82,11 @@ dirSource eq dir = do
     e2e :: FP.FilePath -> FSN.Event -> IO ([FP.FilePath], DataUpdate)
     e2e pf (FSN.Added fp _) = r pf fp
     e2e pf (FSN.Modified fp _) = r pf fp
-    e2e pf (FSN.Removed fp _) = return $ (FP.splitDirectories . FP.makeRelative pf $ fp, DataDel)
+    e2e pf (FSN.Removed fp _) = return $ (drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp, DataDel)
     r :: FP.FilePath -> FP.FilePath -> IO ([FP.FilePath], DataUpdate)
     r pf fp = do
       d <- liftIO . BS.readFile $ fp
-      d `deepseq` return (FP.splitDirectories . FP.makeRelative pf $ fp, DataMod d)
+      d `deepseq` return (drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp, DataMod d)
     readDb :: IO [([FP.FilePath], DataUpdate)]
     readDb = do
       runResourceT $
