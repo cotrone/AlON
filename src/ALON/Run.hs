@@ -12,14 +12,14 @@ import Control.Concurrent.STM
 import Data.Dependent.Sum (DSum)
 import Data.ByteString (ByteString)
 import Control.Monad.Loops
-import qualified System.FilePath as FP
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
+import Data.Text (Text)
 
 type SiteResult = Dynamic Spider (DirTree (Dynamic Spider ByteString))
 
 type AlONSite = TQueue (DSum (EventTrigger Spider)) -> HostFrame Spider SiteResult
 
-type UpdateSite = [([FP.FilePath], Maybe ByteString)] -> IO ()
+type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
 
 type SetupSite = DirTree ByteString -> IO ()
 

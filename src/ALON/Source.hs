@@ -27,6 +27,8 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Data.Time
 import System.Directory
+import Data.Text (Text)
+import qualified Data.Text as T
 
 time :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m)
      => TQueue (DSum (EventTrigger Spider))
@@ -41,7 +43,7 @@ time q dt = do
   now <- liftIO getCurrentTime
   holdDyn now e
 
-type DirTree a = TrieMap FP.FilePath a
+type DirTree a = TrieMap Text a
 
 data DataUpdate =
     DataMod ByteString
@@ -79,15 +81,18 @@ dirSource eq dir = do
     initDir <- foldM (flip doDirTree) mempty initS
     foldDynM doDirTree initDir de
   where
-    e2e :: FP.FilePath -> FSN.Event -> IO ([FP.FilePath], DataUpdate)
+    e2e :: FP.FilePath -> FSN.Event -> IO ([Text], DataUpdate)
     e2e pf (FSN.Added fp _) = r pf fp
     e2e pf (FSN.Modified fp _) = r pf fp
-    e2e pf (FSN.Removed fp _) = return $ (drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp, DataDel)
-    r :: FP.FilePath -> FP.FilePath -> IO ([FP.FilePath], DataUpdate)
+    e2e pf (FSN.Removed fp _) =
+        return $ ( map T.pack . drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp
+                 , DataDel)
+    r :: FP.FilePath -> FP.FilePath -> IO ([Text], DataUpdate)
     r pf fp = do
       d <- liftIO . BS.readFile $ fp
-      d `deepseq` return (drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp, DataMod d)
-    readDb :: IO [([FP.FilePath], DataUpdate)]
+      d `deepseq` return ( map T.pack . drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp
+                         , DataMod d)
+    readDb :: IO [([Text], DataUpdate)]
     readDb = do
       runResourceT $
         sourceDirectoryDeep True dir $= CL.mapM (liftIO . r "") $$ CL.consume
