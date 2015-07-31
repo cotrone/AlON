@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, FlexibleContexts #-}
 module Main where
 
+import Network.Wai.Handler.Warp (defaultSettings)
 import ALON.Source
-import ALON.Run
+import ALON.WebServer
 
 main :: IO ()
 main =
-    runSite print (mapM_ print) frm
+    runWarp defaultSettings frm
   where
     frm eq = do
       --et <- time eq 1

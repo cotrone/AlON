@@ -36,7 +36,7 @@ library
       , monad-loops == 0.4.*
       , dependent-sum
       , reflex == 0.2.*
-      , fsnotify == 0.1.*
+      , fsnotify == 0.2.*
       , list-tries == 0.6.*
       , filepath == 1.4.*
       , conduit == 1.2.*
@@ -72,3 +72,4 @@ executable test
       , system-filepath == 0.4.*
       , bytestring
       , monad-loops == 0.4.*
+      , warp
