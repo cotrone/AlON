@@ -35,7 +35,7 @@ library
       , bytestring == 0.10.*
       , monad-loops == 0.4.*
       , dependent-sum
-      , reflex == 0.2.*
+      , reflex == 0.3.*
       , fsnotify == 0.2.*
       , list-tries == 0.6.*
       , filepath == 1.4.*
@@ -67,7 +67,7 @@ executable test
       , mtl
       , dependent-sum
       , time
-      , reflex == 0.2.*
+      , reflex == 0.3.*
       , list-tries == 0.6.*
       , system-filepath == 0.4.*
       , bytestring
