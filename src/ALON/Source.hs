@@ -70,7 +70,7 @@ dirSource eq dir = do
     let doDyn fl di = foldDyn (\e v ->
                                   case e of
                                     (fp, DataMod d) | fp == fl -> d
-                                    _ -> v) di de
+                                    _ -> v) di . ffilter ((==) fl . fst) $ de
         doDirTree c t =
             case c of
                (fp, DataDel) -> return . LT.delete fp $ t
