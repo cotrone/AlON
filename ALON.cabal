@@ -46,6 +46,7 @@ library
       , directory == 1.2.*
       , wai
       , wai-extra
+      , wai-cors
       , warp
       , base16-bytestring
       , skein

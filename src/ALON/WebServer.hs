@@ -21,6 +21,7 @@ import qualified Network.HTTP.Types as HTTP
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Control.Concurrent
+import Network.Wai.Middleware.Cors
 
 import ALON.Source
 import ALON.Run
@@ -37,18 +38,20 @@ runWarp settings site = do
         cm <- mapM (const newTChanIO) is
         atomically . writeTVar siteState $ SS is cm
         -- fire off warp
-        void . forkIO . Warp.runSettings settings $ \r mk -> do
-          ss <- atomically . readTVar $ siteState
-          let lkUp = LT.lookup (WAI.pathInfo r)
-          case (,) <$> (lkUp . sContent $ ss) <*> (lkUp . ssEvents $ ss) of
-            Nothing -> mk . WAI.responseBuilder HTTP.notFound404 [] . fromText $ "Not found"
-            Just (_, c) | ("GET" == WAI.requestMethod r) &&
-                          (fromMaybe False . fmap (elem "text/event-stream" . T.splitOn ", " . TE.decodeUtf8) . lookup HTTP.hAccept . WAI.requestHeaders $ r) -> do
-              cc <- atomically . cloneTChan $ c
-              eventSourceAppIO (atomically . readTChan $ cc) r mk
-            Just (d, _) | ("GET" == WAI.requestMethod r) ->
-              mk . WAI.responseBuilder HTTP.status200 [] . fromByteString $ d
-            _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
+        void . forkIO . Warp.runSettings settings .
+          cors (const . Just $ CorsResourcePolicy Nothing ["GET"] ["Accept"] Nothing Nothing False False True) $
+          \r mk -> do
+            ss <- atomically . readTVar $ siteState
+            let lkUp = LT.lookup (WAI.pathInfo r)
+            case (,) <$> (lkUp . sContent $ ss) <*> (lkUp . ssEvents $ ss) of
+              Nothing -> mk . WAI.responseBuilder HTTP.notFound404 [] . fromText $ "Not found"
+              Just (_, c) | ("GET" == WAI.requestMethod r) &&
+                            (fromMaybe False . fmap (elem "text/event-stream" . T.splitOn ", " . TE.decodeUtf8) . lookup HTTP.hAccept . WAI.requestHeaders $ r) -> do
+                cc <- atomically . cloneTChan $ c
+                eventSourceAppIO (atomically . readTChan $ cc) r mk
+              Just (d, _) | ("GET" == WAI.requestMethod r) ->
+                mk . WAI.responseBuilder HTTP.status200 [] . fromByteString $ d
+              _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
   let upSite ups = atomically $ do
         i' <- readTVar siteState
         inxt <- (\a -> foldM a i' ups) $ \ i (fp, md) -> do
