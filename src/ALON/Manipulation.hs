@@ -1,15 +1,38 @@
+{-# LANGUAGE ExplicitForAll, RankNTypes, ScopedTypeVariables, TupleSections #-}
 module ALON.Manipulation (
+    collapse
+  , mapDynTreeWithKey
+  , mergeDynTree
   ) where
 
-import Reflex.Dynamic
+import qualified Data.Map as Map
+import Data.Maybe
+import Control.Monad
+import Data.Text (Text)
+import qualified Data.ListTrie.Patricia.Map.Ord as LT
+import ALON.Source
+import Reflex
 
+-- This module is terrible code, nothing has been optimized.
+-- This is purely a demonstration implimentation.
 
---mapDynM :: forall t m a b. (Reflex t, MonadHold t m) => (forall m'. MonadSample t m' => a -> m' b) -> Dynamic t a -> m (Dynamic t b)
+collapse :: forall t m a b. (Reflex t, MonadHold t m) => Int -> (forall m'. MonadSample t m' => [Text] -> (DirTree (Dynamic t a)) -> m' (Maybe (Dynamic t b))) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
+collapse d f = mapDynM $ \v -> do
+   let (vl::[([Text], DirTree (Dynamic t a))]) = (head . drop d) <$> iterate children1' [([], v)]
+   (LT.unions . catMaybes) <$> (forM vl (\(pp, tt) -> (fmap (LT.singleton pp)) <$> f pp tt))
+  where
+   children1' :: [([Text], DirTree (Dynamic t a))] -> [([Text], DirTree (Dynamic t a))]
+   children1' tl = do
+     (p', t') <- tl
+     (p'', t'') <- Map.toList . LT.children1 $ t'
+     return (p'++[p''], t'')
 
-proccessDynTree :: (Reflex t, MonadHold t m) => ([FilePath -> a -> b) -> Dynamic Spider (DirTree (Dynamic Spider a))) -> m (Dynamic Spider (DirTree (Dynamic Spider b))))
-proccessDynTree f = mapDynM $ \v -> do
-  
+mapDynTreeWithKey :: (Reflex t, MonadHold t m) => (forall m'. MonadSample t m' => [Text] -> Dynamic t a -> m' (Dynamic t b)) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
+mapDynTreeWithKey f = mapDynM $ \v -> do
+  LT.fromList <$> (forM (LT.toList v) $ \(p, d) -> do
+    n <- f p d
+    return (p, n))
 
---mergeDynTree :: Dynamic Spider (DirTree (Dynamic Spider a))) -> Dynamic Spider (DirTree (Dynamic Spider a)))
---             -> m (Dynamic Spider (DirTree (Dynamic Spider a)))
---mergeDynTree a b = mconcatDyn [a, b]
+mergeDynTree :: (Reflex t, MonadHold t m) => Dynamic t (DirTree (Dynamic t a)) -> Dynamic t (DirTree (Dynamic t a))
+             -> m (Dynamic t (DirTree (Dynamic t a)))
+mergeDynTree a b = mconcatDyn [a, b]

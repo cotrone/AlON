@@ -27,12 +27,14 @@ library
           ALON.Source
         , ALON.Run
         , ALON.WebServer
+        , ALON.Manipulation
   build-depends:
         base >=4.8 && <4.9
       , deepseq == 1.4.*
       , mtl
       , stm
       , bytestring == 0.10.*
+      , containers == 0.5.*
       , monad-loops == 0.4.*
       , dependent-sum
       , reflex == 0.3.*
