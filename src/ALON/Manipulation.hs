@@ -14,13 +14,19 @@ import ALON.Source
 import Reflex
 
 -- This module is terrible code, nothing has been optimized.
--- This is purely a demonstration implimentation.
+-- This is purely a demonstration implementation.
 
-collapse :: forall t m a b. (Reflex t, MonadHold t m) => Int -> (forall m'. MonadSample t m' => [Text] -> (DirTree (Dynamic t a)) -> m' (Maybe (Dynamic t b))) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
-collapse d f = mapDynM $ \v -> do
-   let (vl::[([Text], DirTree (Dynamic t a))]) = (head . drop d) <$> iterate children1' [([], v)]
-   (LT.unions . catMaybes) <$> (forM vl (\(pp, tt) -> (fmap (LT.singleton pp)) <$> f pp tt))
+collapse :: forall t m a b. (Reflex t, MonadHold t m)
+         => Int
+         -> Dynamic t (DirTree (Dynamic t a))
+         -> (forall m'. MonadSample t m' => [Text] -> (DirTree (Dynamic t a))
+                                         -> m' (Maybe (DirTree (Dynamic t b))))
+         -> m (Dynamic t (DirTree (Dynamic t b)))
+collapse d ti f = mapDynM proccess ti
   where
+   proccess v = do
+     let (vl::[([Text], DirTree (Dynamic t a))]) = head . drop d . iterate children1' $ [([], v)]
+     (LT.unions . catMaybes) <$> forM vl (uncurry f)
    children1' :: [([Text], DirTree (Dynamic t a))] -> [([Text], DirTree (Dynamic t a))]
    children1' tl = do
      (p', t') <- tl

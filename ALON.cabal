@@ -76,3 +76,4 @@ executable test
       , bytestring
       , monad-loops == 0.4.*
       , warp
+      , text
