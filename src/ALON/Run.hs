@@ -3,7 +3,6 @@ module ALON.Run (
   , runSite
   ) where
 
-import Control.Monad
 import Control.Monad.Trans
 import ALON.Source
 import Reflex
@@ -47,9 +46,9 @@ runSite setup up frm = runSpiderHost $ do
    - Anything left from removing the new tree from the old is a deleted entry.
    - And, since they can't be in the events we got from the update, we know there is no overlap.
    -}
-  void . forever $ do
+  tss' <- sample . current $ o
+  (`iterateM_` tss') $ \tss -> do
     e <- liftIO . atomically $ readTQueue eq
-    tss <- sample . current $ o
     ecw <- mapM (subscribeEvent . updated) $ tss
     ec <- fireEventsAndRead [e] $ do
                      oces <- mapM readEvent $ ecw
@@ -59,3 +58,4 @@ runSite setup up frm = runSpiderHost $ do
     let remed = fmap (fmap $ const Nothing) . LT.toList . LT.difference tss $ tes
     liftIO . putStrLn $ "Events"
     liftIO . up $ ec++added++remed
+    return tes
