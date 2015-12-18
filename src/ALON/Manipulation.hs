@@ -33,7 +33,10 @@ collapse d ti f = mapDynM proccess ti
      (p'', t'') <- Map.toList . LT.children1 $ t'
      return (p'++[p''], t'')
 
-mapDynTreeWithKey :: (Reflex t, MonadHold t m) => (forall m'. MonadSample t m' => [Text] -> Dynamic t a -> m' (Dynamic t b)) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
+mapDynTreeWithKey :: (Reflex t, MonadHold t m)
+                  => (forall m'. MonadSample t m' => [Text] -> Dynamic t a -> m' (Dynamic t b))
+                  -> Dynamic t (DirTree (Dynamic t a))
+                  -> m (Dynamic t (DirTree (Dynamic t b)))
 mapDynTreeWithKey f = mapDynM $ \v -> do
   LT.fromList <$> (forM (LT.toList v) $ \(p, d) -> do
     n <- f p d
