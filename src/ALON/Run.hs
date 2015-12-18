@@ -14,9 +14,9 @@ import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 
-type SiteResult = Dynamic Spider (DirTree (Dynamic Spider ByteString))
+type SiteResult t = Dynamic t (DirTree (Dynamic t ByteString))
 
-type AlONSite = TQueue (DSum (EventTrigger Spider)) -> HostFrame Spider SiteResult
+type AlONSite = TQueue (DSum (EventTrigger Spider)) -> HostFrame Spider (SiteResult Spider)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
 

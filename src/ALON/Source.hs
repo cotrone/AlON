@@ -30,9 +30,9 @@ import System.Directory
 import Data.Text (Text)
 import qualified Data.Text as T
 
-time :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m)
-     => TQueue (DSum (EventTrigger Spider))
-     -> DiffTime -> m (Dynamic Spider UTCTime)
+time :: (MonadIO m, Reflex t, MonadHold t m, MonadReflexCreateTrigger t m)
+     => TQueue (DSum (EventTrigger t))
+     -> DiffTime -> m (Dynamic t UTCTime)
 time q dt = do
   e <- newEventWithTrigger $ \et -> do
     t <- forkIO . forever $ do
@@ -50,9 +50,9 @@ data DataUpdate =
   | DataDel
   deriving (Eq, Ord, Show)
 
-dirSource :: (MonadIO m, MonadHold Spider m, MonadReflexCreateTrigger Spider m, MonadFix m)
-          => TQueue (DSum (EventTrigger Spider))
-          -> FP.FilePath -> m (Dynamic Spider (DirTree (Dynamic Spider ByteString)))
+dirSource :: (MonadFix m, MonadIO m, Reflex t, MonadHold t m, MonadReflexCreateTrigger t m)
+          => TQueue (DSum (EventTrigger t))
+          -> FP.FilePath -> m (Dynamic t (DirTree (Dynamic t ByteString)))
 dirSource eq dir = do
     de <- newEventWithTrigger $ \et -> do
       t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m -> do
