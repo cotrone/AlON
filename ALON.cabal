@@ -24,7 +24,8 @@ library
   ghc-options: -Wall -O2 -rtsopts -with-rtsopts=-T
   ghc-prof-options: -prof -auto-all -fprof-auto
   exposed-modules:
-          ALON.Source
+          ALON.Types
+        , ALON.Source
         , ALON.Template
         , ALON.Run
         , ALON.WebServer
@@ -36,6 +37,7 @@ library
       , stm
       , bytestring
       , containers
+      , unordered-containers
       , monad-loops
       , dependent-sum
       , reflex
