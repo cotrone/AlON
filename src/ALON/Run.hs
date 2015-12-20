@@ -1,14 +1,17 @@
+{-# LANGUAGE RankNTypes, FlexibleContexts #-}
 module ALON.Run (
     SiteResult, AlONSite, UpdateSite, SetupSite
   , runSite
   ) where
 
 import Control.Monad.Trans
+import Control.Monad.Reader
+import Control.Monad.State
+import ALON.Types
 import ALON.Source
 import Reflex
 import Reflex.Host.Class
 import Control.Concurrent.STM
-import Data.Dependent.Sum (DSum)
 import Data.ByteString (ByteString)
 import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
@@ -16,7 +19,9 @@ import Data.Text (Text)
 
 type SiteResult t = Dynamic t (DirTree (Dynamic t ByteString))
 
-type AlONSite = TQueue (DSum (EventTrigger Spider)) -> HostFrame Spider (SiteResult Spider)
+type AlONSite =
+  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t)) =>
+  ALONT t (HostFrame t) (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
 
@@ -26,7 +31,7 @@ runSite :: SetupSite -> UpdateSite -> AlONSite -> IO ()
 runSite setup up frm = runSpiderHost $ do
   eq <- liftIO newTQueueIO
 
-  o <- runHostFrame . frm $ eq
+  o <- runHostFrame . (`evalStateT` (constDyn [])) . (`runReaderT` eq) . unALON $ frm
 
   pre <- liftIO . atomically . whileM (not <$> isEmptyTQueue eq) $ readTQueue eq
   fireEvents pre

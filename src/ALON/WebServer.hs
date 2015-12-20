@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, OverloadedStrings #-}
 module ALON.WebServer (
     runWarp
   ) where

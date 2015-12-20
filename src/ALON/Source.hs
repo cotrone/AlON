@@ -7,7 +7,6 @@ module ALON.Source (
 
 import Control.DeepSeq
 import Control.Monad
-import Control.Monad.Fix
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -30,13 +29,15 @@ import System.Directory
 import Data.Text (Text)
 import qualified Data.Text as T
 
-time :: (MonadIO m, Reflex t, MonadHold t m, MonadReflexCreateTrigger t m)
-     => TQueue (DSum (EventTrigger t))
-     -> DiffTime -> m (Dynamic t UTCTime)
-time q dt = do
+import ALON.Types
+
+time :: (Reflex t, MonadALON t m)
+     => DiffTime -> m (Dynamic t UTCTime)
+time dt = do
+  eq <- askEQ
   e <- newEventWithTrigger $ \et -> do
     t <- forkIO . forever $ do
-           getCurrentTime >>= (atomically . writeTQueue q . (et :=>))
+           getCurrentTime >>= (atomically . writeTQueue eq . (et :=>))
            -- This drifts. Not considered a problem for its intended use.
            threadDelay . floor $ dt*(10^(6::Int))
     return $ killThread t
@@ -50,10 +51,10 @@ data DataUpdate =
   | DataDel
   deriving (Eq, Ord, Show)
 
-dirSource :: (MonadFix m, MonadIO m, Reflex t, MonadHold t m, MonadReflexCreateTrigger t m)
-          => TQueue (DSum (EventTrigger t))
-          -> FP.FilePath -> m (Dynamic t (DirTree (Dynamic t ByteString)))
-dirSource eq dir = do
+dirSource :: (Reflex t, MonadALON t m)
+          => FP.FilePath -> m (Dynamic t (DirTree (Dynamic t ByteString)))
+dirSource dir = do
+    eq <- askEQ
     de <- newEventWithTrigger $ \et -> do
       t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m -> do
         E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do

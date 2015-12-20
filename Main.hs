@@ -7,6 +7,7 @@ import qualified Data.Text.Encoding as TE
 import Network.Wai.Handler.Warp (defaultSettings)
 import ALON.Source
 import ALON.Manipulation
+import ALON.Run
 import ALON.WebServer
 
 import Reflex
@@ -15,9 +16,10 @@ main :: IO ()
 main =
     runWarp defaultSettings frm
   where
-    frm eq = do
-      --et <- time eq 1
-      dt <- dirSource eq "test_dir"
+    frm :: AlONSite
+    frm = do
+      --et <- time 1
+      dt <- dirSource "test_dir"
       collapse 1 dt $ \ts' dt' -> do
         dt'' <- mapM (sample . current) dt'
         return . Just . LT.singleton ts' . constDyn . TE.encodeUtf8 . T.pack . LT.showTrie dt'' $ ""
