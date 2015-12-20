@@ -23,7 +23,7 @@ import ALON.Source
 import ALON.Manipulation
 import ALON.Types
 
-render :: forall t m k. (Reflex t, MonadHold t m, ToMustache k)
+render :: forall t m k. (Reflex t, MonadALON t m, ToMustache k)
        => Text -> Dynamic t TemplateCache -> Dynamic t k
        -> m (Dynamic t (Maybe Text))
 render nm t v = do
@@ -38,7 +38,7 @@ render nm t v = do
 dynBS2Text :: (Reflex t, MonadSample t m) => Dynamic t BS.ByteString -> m (Dynamic t Text)
 dynBS2Text dt = (constDyn . TE.decodeUtf8) <$> (sample . current$ dt)
 
-cacheTemplates :: forall t m. (Reflex t, MonadHold t m)
+cacheTemplates :: forall t m. (Reflex t, MonadALON t m)
                => [Dynamic t (DirTree (Dynamic t BS.ByteString))]
                -> m (Dynamic t TemplateCache)
 cacheTemplates srcs = do
@@ -66,4 +66,3 @@ cacheTemplates srcs = do
   alonLogErrors errD
   mapDyn cacheFromList tsD
 
---foldDyn :: (Reflex t, MonadHold t m, MonadFix m) => (a -> b -> b) -> b -> Event t a -> m (Dynamic t b)
