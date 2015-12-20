@@ -8,6 +8,7 @@ import Network.Wai.Handler.Warp (defaultSettings)
 import ALON.Source
 import ALON.Manipulation
 import ALON.Run
+import ALON.Types
 import ALON.WebServer
 
 import Reflex
@@ -18,6 +19,7 @@ main =
   where
     frm :: AlONSite
     frm = do
+      alonLogErrors (constDyn ["Test error"])
       --et <- time 1
       dt <- dirSource "test_dir"
       collapse 1 dt $ \ts' dt' -> do

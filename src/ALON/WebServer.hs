@@ -19,6 +19,7 @@ import Blaze.ByteString.Builder
 import Blaze.ByteString.Builder.Char.Utf8
 import qualified Network.HTTP.Types as HTTP
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import qualified Data.Text.Encoding as TE
 import Control.Concurrent
 import Network.Wai.Middleware.Cors
@@ -68,5 +69,5 @@ runWarp settings site = do
                                    []
                      return $ SS (LT.insert' fp d . sContent $ i) (LT.insert fp c . ssEvents $ i)
         writeTVar siteState inxt
-  runSite startSite upSite site
+  runSite (TIO.putStrLn . T.intercalate "\n") startSite upSite site
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts #-}
 module ALON.Run (
     SiteResult, AlONSite, UpdateSite, SetupSite
   , runSite
@@ -28,16 +28,23 @@ type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
 
 type SetupSite = DirTree ByteString -> IO ()
 
-runSite :: SetupSite -> UpdateSite -> AlONSite -> IO ()
-runSite setup up frm = runSpiderHost $ do
-  eq <- liftIO newTQueueIO
+type HandleErrors = [Text] -> IO ()
 
-  o <- runHostFrame . (`evalStateT` (constDyn [])) . (`runReaderT` eq) . unALON $ frm
+runSite :: HandleErrors -> SetupSite -> UpdateSite -> AlONSite -> IO ()
+runSite herr setup up frm = runSpiderHost $ do
+  startTime' <- liftIO getCurrentTime
+
+  eq <- liftIO newTQueueIO
+  (o, errD) <- runHostFrame . (`runStateT` (constDyn [])) . (`runReaderT` eq) . unALON $ frm
 
   pre <- liftIO . atomically . whileM (not <$> isEmptyTQueue eq) $ readTQueue eq
   fireEvents pre
   fstate <- (sample . current $ o) >>= mapM (sample . current)
   liftIO . setup $ fstate
+  errs' <- sample . current $ errD
+  finishedTime' <- liftIO getCurrentTime
+  liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
+  liftIO . herr $ errs'
 
   {- Ok, this gets a bit complicated.
    -
@@ -63,7 +70,9 @@ runSite setup up frm = runSpiderHost $ do
     tes <- sample . current $ o
     added <- (fmap (fmap Just) . LT.toList) <$> (mapM (sample . current) . LT.difference tes $ tss)
     let remed = fmap (fmap $ const Nothing) . LT.toList . LT.difference tss $ tes
+    errs <- sample . current $ errD
     finishedTime <- liftIO getCurrentTime
     liftIO . putStrLn $ ("Events ("++(show $ finishedTime `diffUTCTime` startTime)++")")
+    liftIO . herr $ errs
     liftIO . up $ ec++added++remed
     return tes
