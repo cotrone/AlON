@@ -8,6 +8,7 @@ module ALON.Source (
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
+import qualified Data.Map as Map
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ListTrie.Patricia.Map.Ord (TrieMap)
@@ -19,6 +20,7 @@ import Data.Conduit (($=), ($$))
 import qualified Data.Conduit.List as CL
 import Data.Conduit.Combinators (sourceDirectoryDeep)
 import qualified Control.Exception as E
+import Data.Functor.Misc
 import Reflex
 import Reflex.Host.Class
 import Data.Dependent.Sum (DSum ((:=>)))
@@ -68,10 +70,13 @@ dirSource dir = do
             e <- atomically (readTQueue wq) >>= e2e pwd
             atomically . writeTQueue eq $ et :=> e
       return (killThread t)
-    let doDyn fl di = foldDyn (\e v ->
+    let des = fanMap $ (uncurry Map.singleton) <$> de
+        flEvent = select des . Const2 
+        --flEvent fl = fmap snd . ffilter ((==) fl . fst) $ de
+        doDyn fl di = foldDyn (\e v ->
                                   case e of
-                                    (fp, DataMod d) | fp == fl -> d
-                                    _ -> v) di . ffilter ((==) fl . fst) $ de
+                                    DataMod d -> d
+                                    _ -> v) di . flEvent $ fl
         doDirTree c t =
             case c of
                (fp, DataDel) -> return . LT.delete fp $ t

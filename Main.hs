@@ -22,7 +22,8 @@ main =
       alonLogErrors (constDyn ["Test error"])
       --et <- time 1
       dt <- dirSource "test_dir"
+      return dt {-
       collapse 1 dt $ \ts' dt' -> do
         dt'' <- mapM (sample . current) dt'
         return . Just . LT.singleton ts' . constDyn . TE.encodeUtf8 . T.pack . LT.showTrie dt'' $ ""
---      return dt
+--      return dt -}
