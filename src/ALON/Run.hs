@@ -9,6 +9,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import ALON.Types
 import ALON.Source
+import Data.Time
 import Reflex
 import Reflex.Host.Class
 import Control.Concurrent.STM
@@ -54,6 +55,7 @@ runSite setup up frm = runSpiderHost $ do
   tss' <- sample . current $ o
   (`iterateM_` tss') $ \tss -> do
     e <- liftIO . atomically $ readTQueue eq
+    startTime <- liftIO getCurrentTime
     ecw <- mapM (subscribeEvent . updated) $ tss
     ec <- fireEventsAndRead [e] $ do
                      oces <- mapM readEvent $ ecw
@@ -61,6 +63,7 @@ runSite setup up frm = runSpiderHost $ do
     tes <- sample . current $ o
     added <- (fmap (fmap Just) . LT.toList) <$> (mapM (sample . current) . LT.difference tes $ tss)
     let remed = fmap (fmap $ const Nothing) . LT.toList . LT.difference tss $ tes
-    liftIO . putStrLn $ "Events"
+    finishedTime <- liftIO getCurrentTime
+    liftIO . putStrLn $ ("Events ("++(show $ finishedTime `diffUTCTime` startTime)++")")
     liftIO . up $ ec++added++remed
     return tes

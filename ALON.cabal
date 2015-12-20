@@ -33,6 +33,7 @@ library
   build-depends:
         base >=4.8 && <4.9
       , deepseq
+      , time
       , mtl
       , stm
       , bytestring
