@@ -20,10 +20,9 @@ collapse :: forall t m a b. (Reflex t, MonadHold t m)
          => Int
          -> Dynamic t (DirTree (Dynamic t a))
          -> (forall m'. MonadSample t m' => [Text] -> (DirTree (Dynamic t a))
-                                         -> m' (Maybe (DirTree (Dynamic t b))))
+                                       -> m' (Maybe (DirTree (Dynamic t b))))
          -> m (Dynamic t (DirTree (Dynamic t b)))
 collapse d ti f = do
-    error "This somehow prevents the returned Dyn from updating in the future except for adds and deletes."
     mapDynM proccess ti
   where
    proccess v = do

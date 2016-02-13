@@ -30,6 +30,7 @@ import Data.Time
 import System.Directory
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Functor.Identity
 
 import ALON.Types
 
@@ -39,7 +40,7 @@ time dt = do
   eq <- askEQ
   e <- newEventWithTrigger $ \et -> do
     t <- forkIO . forever $ do
-           getCurrentTime >>= (atomically . writeTQueue eq . (et :=>))
+           getCurrentTime >>= (atomically . writeTQueue eq . (et :=>) . Identity)
            -- This drifts. Not considered a problem for its intended use.
            threadDelay . floor $ dt*(10^(6::Int))
     return $ killThread t
@@ -68,7 +69,7 @@ dirSource dir = do
           pwd <- getCurrentDirectory
           forever . E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
             e <- atomically (readTQueue wq) >>= e2e pwd
-            atomically . writeTQueue eq $ et :=> e
+            atomically . writeTQueue eq $ et :=> (Identity e)
       return (killThread t)
     let des = fanMap $ (uncurry Map.singleton) <$> de
         flEvent = select des . Const2 
