@@ -20,6 +20,9 @@ main =
     frm :: AlONSite
     frm = do
       alonLogErrors (constDyn ["Test error"])
-      --et <- time 1
+      et <- time 1
       dt <- dirSource "test_dir"
-      return dt
+      mt <- dirSource "math_dir"
+      -- fmap (RunExternal "dc" []) <$> 
+      rt <- mergeDynTree mt dt 
+      return rt
