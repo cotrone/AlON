@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes #-}
 module ALON.Transforms (
     runProcess, RunExternal(..)
+  , apply2contents
   , cacheTemplates
   , render
   ) where
@@ -117,10 +118,5 @@ cacheTemplates srcs = do
   alonLogErrors errD
   mapDyn cacheFromList tsD
 
-{-
-apply2contents :: (Reflex t, MonadHold t m) => (Event t a -> Event t b) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
-apply2contents trans = mapDynM $
-  traverse . fmap (\n -> do
-           c <- sample . current $ n
-           trans . updated $ n)
--}
+apply2contents ::  (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t)) => (forall m'. (MonadSample t m', MonadIO m') => Dynamic t a -> m' (Dynamic t b)) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
+apply2contents trans = mapDynMIO (traverse trans)

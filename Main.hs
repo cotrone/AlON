@@ -10,6 +10,7 @@ import ALON.Manipulation
 import ALON.Run
 import ALON.Types
 import ALON.WebServer
+import ALON.Transforms
 
 import Reflex
 
@@ -23,6 +24,6 @@ main =
       et <- time 1
       dt <- dirSource "test_dir"
       mt <- dirSource "math_dir"
-      -- fmap (RunExternal "dc" []) <$> 
-      rt <- mergeDynTree mt dt 
+      pt <- mapDynTreeWithKey (\_ ds -> (constDyn . RunExternal "dc" []) <$> (sample . current $ ds)) mt
+      rt <- mergeDynTree pt dt 
       return rt
