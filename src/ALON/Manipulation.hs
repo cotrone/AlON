@@ -1,16 +1,18 @@
-{-# LANGUAGE ExplicitForAll, RankNTypes, ScopedTypeVariables, TupleSections #-}
+{-# LANGUAGE ExplicitForAll, FlexibleContexts, RankNTypes, ScopedTypeVariables, TupleSections #-}
 module ALON.Manipulation (
     collapse
   , mapDynTreeWithKey
   , mergeDynTree
   ) where
 
+import Control.Monad.Trans
 import qualified Data.Map as Map
 import Data.Maybe
 import Control.Monad
 import Data.Text (Text)
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import ALON.Source
+import ALON.Types
 import Reflex
 
 -- This module is terrible code, nothing has been optimized.
@@ -34,13 +36,13 @@ collapse d ti f = do
      (p'', t'') <- Map.toList . LT.children1 $ t'
      return (p'++[p''], t'')
 
-mapDynTreeWithKey :: (Reflex t, MonadHold t m)
-                  => (forall m'. MonadSample t m' => [Text] -> Dynamic t a -> m' (Dynamic t b))
+mapDynTreeWithKey :: (Reflex t, MonadHold t m, MonadIO m, MonadIO (PushM t), MonadIO (PullM t))
+                  => (forall m'. (MonadSample t m', MonadIO m') => [Text] -> Dynamic t a -> m' b)
                   -> Dynamic t (DirTree (Dynamic t a))
                   -> m (Dynamic t (DirTree (Dynamic t b)))
-mapDynTreeWithKey f = mapDynM $ \v -> do
+mapDynTreeWithKey f = mapDynMIO $ \v -> do
   LT.fromList <$> (forM (LT.toList v) $ \(p, d) -> do
-    n <- f p d
+    n <- constDyn <$> f p d
     return (p, n))
 
 mergeDynTree :: (Reflex t, MonadHold t m) => Dynamic t (DirTree (Dynamic t a)) -> Dynamic t (DirTree (Dynamic t a))

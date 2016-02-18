@@ -21,7 +21,7 @@ import Data.Text (Text)
 type SiteResult t = Dynamic t (DirTree (Dynamic t ByteString))
 
 type AlONSite =
-  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t)) =>
+  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t), MonadIO (PushM t), MonadIO (PullM t)) =>
   ALONT t (HostFrame t) (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()

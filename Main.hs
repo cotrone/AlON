@@ -24,6 +24,6 @@ main =
       et <- time 1
       dt <- dirSource "test_dir"
       mt <- dirSource "math_dir"
-      pt <- mapDynTreeWithKey (\_ ds -> (constDyn . RunExternal "dc" []) <$> (sample . current $ ds)) mt
-      rt <- mergeDynTree pt dt 
+      pt <- mapDynTreeWithKey (\_ ds -> ((RunExternal "dc" []) <$> (sample . current $ ds)) >>= (fmap snd . runProcess)) mt
+      rt <- mergeDynTree pt dt
       return rt
