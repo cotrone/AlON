@@ -20,7 +20,6 @@ main =
   where
     frm :: AlONSite
     frm = do
-      alonLogErrors (constDyn ["Test error"])
       et <- time 1
       dt <- dirSource "test_dir"
       mt <- dirSource "math_dir"

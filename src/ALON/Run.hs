@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
 module ALON.Run (
     SiteResult, AlONSite, UpdateSite, SetupSite
   , runSite
@@ -10,13 +10,22 @@ import Control.Monad.State
 import ALON.Types
 import ALON.Source
 import Data.Time
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Reflex
 import Reflex.Host.Class
+import Data.Functor.Misc
+import Data.Functor.Identity
+import Data.Dependent.Map (DSum((:=>)))
+import qualified Data.Dependent.Map as DMap
 import Control.Concurrent.STM
 import Data.ByteString (ByteString)
 import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
+import Data.List
+
+import qualified Debug.Trace as Debug
 
 type SiteResult t = Dynamic t (DirTree (Dynamic t ByteString))
 
@@ -59,20 +68,42 @@ runSite herr setup up frm = runSpiderHost $ do
    - Anything left from removing the new tree from the old is a deleted entry.
    - And, since they can't be in the events we got from the update, we know there is no overlap.
    -}
-  tss' <- sample . current $ o
-  (`iterateM_` tss') $ \tss -> do
+  initialMapping <- sample . current $ o
+  let existingPages'::DMap.DMap (Const2 [Text] ByteString) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
+  (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
+
+    -- Read the new events
     e <- liftIO . atomically $ readTQueue eq
+
     startTime <- liftIO getCurrentTime
-    ecw <- mapM (subscribeEvent . updated) $ tss
-    ec <- fireEventsAndRead [e] $ do
-                     oces <- mapM readEvent $ ecw
-                     (LT.toList . fmap Just) <$> (sequenceA . LT.mapMaybe id $ oces)
-    tes <- sample . current $ o
-    added <- (fmap (fmap Just) . LT.toList) <$> (mapM (sample . current) . LT.difference tes $ tss)
-    let remed = fmap (fmap $ const Nothing) . LT.toList . LT.difference tss $ tes
+
+    pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
+    ec::[([Text], Maybe ByteString)] <- fireEventsAndRead [e] $ do
+      mchange <- readEvent pageChangeHandle
+      changes <- maybe (return mempty) id mchange
+      return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
+
+    newMapping <- sample . current $ o
+
+    let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
+    added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
+    let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
+
+    -- update the existing page watch so we know about changes to internal pages.
+    let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) formerExistingPages $ addedDyn
+    let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
+    
     errs <- sample . current $ errD
+
     finishedTime <- liftIO getCurrentTime
     liftIO . putStrLn $ ("Events ("++(show $ finishedTime `diffUTCTime` startTime)++")")
+
+    -- Take the resulting actions, logging the errors and updating the site.
     liftIO . herr $ errs
-    liftIO . up $ ec++added++remed
-    return tes
+    liftIO . up $ ec++added++removed
+
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ v]) added)
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ (v::Maybe ByteString)]) removed)
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ v]) ec)
+
+    return (newMapping, newPages)
