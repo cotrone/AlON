@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Reflex
 import Reflex.Host.Class
+import Reflex.Orphans ()
 import Data.Functor.Misc
 import Data.Functor.Identity
 import Data.Dependent.Map (DSum((:=>)))
@@ -25,12 +26,10 @@ import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
 
-import qualified Debug.Trace as Debug
-
 type SiteResult t = Dynamic t (DirTree (Dynamic t ByteString))
 
 type AlONSite =
-  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t), MonadIO (PushM t), MonadIO (PullM t)) =>
+  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t), MonadIO (PushM t), MonadIO (PullM t), Functor (Behavior t), Applicative (Behavior t), Functor (Dynamic t), Applicative (Dynamic t)) =>
   ALONT t (HostFrame t) (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()

@@ -24,6 +24,8 @@ import qualified System.Process as P
 import System.Exit (ExitCode)
 import GHC.IO.Handle
 
+import System.IO.Unsafe
+
 import Reflex
 import ALON.Source
 import ALON.Manipulation
@@ -39,8 +41,8 @@ data RunExternal =
 
 {- stderr is directed to errors.
  -}
-runProcess :: (MonadIO m) => RunExternal -> m (ExitCode, BS.ByteString)
-runProcess (RunExternal cmd args indata) = do
+runProcess :: RunExternal -> (ExitCode, BS.ByteString)
+runProcess (RunExternal cmd args indata) = unsafePerformIO $ do
   let cp = P.CreateProcess
         (P.RawCommand cmd args)
         Nothing Nothing
@@ -78,19 +80,18 @@ render nm t v = do
   alonLogErrors er
   return res
 
-dynBS2Text :: (Reflex t, MonadSample t m) => Dynamic t BS.ByteString -> m (Dynamic t Text)
-dynBS2Text dt = (constDyn . TE.decodeUtf8) <$> (sample . current$ dt)
+dynBS2Text :: (Reflex t, Functor (Dynamic t)) => Dynamic t BS.ByteString -> Dynamic t Text
+dynBS2Text dt = TE.decodeUtf8 <$> dt
 
-cacheTemplates :: forall t m. (Reflex t, MonadALON t m, MonadIO (PushM t), MonadIO (PullM t))
+cacheTemplates :: forall t m. (Reflex t, MonadALON t m, MonadIO (PushM t), MonadIO (PullM t), Functor (Dynamic t))
                => [Dynamic t (DirTree (Dynamic t BS.ByteString))]
                -> m (Dynamic t TemplateCache)
 cacheTemplates srcs = do
-  templateSrcTrees::[Dynamic t (DirTree (Dynamic t Text))] <-
-                   mapM (mapDynM (mapM dynBS2Text)) srcs
-  compiledTrees::[Dynamic t (DirTree (Dynamic t (Either ([Text], ParseError) Template)))] <-
-                mapM (mapDynTreeWithKey (\p dt ->
-                       (first ((,) p) . compileTemplate (FP.joinPath . fmap T.unpack $ p))
-                       <$> (sample . current $ dt)))
+  let templateSrcTrees::[Dynamic t (DirTree (Dynamic t Text))] =
+                   fmap (fmap (fmap dynBS2Text)) srcs
+  let compiledTrees::[Dynamic t (DirTree (Dynamic t (Either ([Text], ParseError) Template)))] =
+                fmap (mapDynTreeWithKey (\p dt ->
+                       (first ((,) p) . compileTemplate (FP.joinPath . fmap T.unpack $ p) $ dt)))
                      templateSrcTrees
   tmplList::Dynamic t [Dynamic t (Either ([Text], ParseError) Template)] <-
            mconcatDyn compiledTrees >>= mapDyn (map snd . LT.toList)

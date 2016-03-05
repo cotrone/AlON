@@ -5,14 +5,12 @@ module ALON.Manipulation (
   , mergeDynTree
   ) where
 
-import Control.Monad.Trans
 import qualified Data.Map as Map
 import Data.Maybe
 import Control.Monad
 import Data.Text (Text)
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import ALON.Source
-import ALON.Types
 import Reflex
 
 -- This module is terrible code, nothing has been optimized.
@@ -36,14 +34,11 @@ collapse d ti f = do
      (p'', t'') <- Map.toList . LT.children1 $ t'
      return (p'++[p''], t'')
 
-mapDynTreeWithKey :: (Reflex t, MonadHold t m, MonadIO m, MonadIO (PushM t), MonadIO (PullM t))
-                  => (forall m'. (MonadSample t m', MonadIO m') => [Text] -> Dynamic t a -> m' b)
+mapDynTreeWithKey :: (Reflex t, Functor (Dynamic t))
+                  => ([Text] -> a -> b)
                   -> Dynamic t (DirTree (Dynamic t a))
-                  -> m (Dynamic t (DirTree (Dynamic t b)))
-mapDynTreeWithKey f = mapDynMIO $ \v -> do
-  LT.fromList <$> (forM (LT.toList v) $ \(p, d) -> do
-    n <- constDyn <$> f p d
-    return (p, n))
+                  -> Dynamic t (DirTree (Dynamic t b))
+mapDynTreeWithKey f = fmap (LT.mapWithKey' (\p d -> f p <$> d))
 
 mergeDynTree :: (Reflex t, MonadHold t m) => Dynamic t (DirTree (Dynamic t a)) -> Dynamic t (DirTree (Dynamic t a))
              -> m (Dynamic t (DirTree (Dynamic t a)))
