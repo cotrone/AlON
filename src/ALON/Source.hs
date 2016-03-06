@@ -54,6 +54,7 @@ timeSlice :: Int -> UTCTime -> Integer
 timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
 
 -- | Efficiently compare a target time with a timebits, becoming True at the chosen time.
+--   This means that, until right before the the target time, almost all events are skipped.
 --
 --   We find a list of the postfixs of the time that show the target time isn't already past.
 --   The list should be the length of the log of the difference of the times, making this efficient.
