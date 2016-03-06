@@ -5,7 +5,6 @@ module ALON.Source (
   , dirSource
   ) where
 
-import Data.Maybe
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
@@ -36,8 +35,6 @@ import Data.Functor.Identity
 import qualified GHC.Event as GHC
 import Data.Bits
 import Data.Time.Clock.POSIX
-
-import Debug.Trace
 
 import ALON.Types
 
@@ -147,7 +144,6 @@ dirSource dir = do
       return (killThread t)
     let des = fanMap $ (uncurry Map.singleton) <$> de
         flEvent = select des . Const2 
-        --flEvent fl = fmap snd . ffilter ((==) fl . fst) $ de
         doDyn fl di = foldDyn (\e v ->
                                   case e of
                                     DataMod d -> d
