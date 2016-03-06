@@ -37,6 +37,8 @@ import qualified GHC.Event as GHC
 import Data.Bits
 import Data.Time.Clock.POSIX
 
+import Debug.Trace
+
 import ALON.Types
 
 -- | TimeBits is a list, each step containing the value of the time since the POSIX epoc, shifted over one.
@@ -64,26 +66,29 @@ timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
 --   This should be leap second resilient.
 afterTime :: forall t m. (Reflex t, MonadSample t m, MonadHold t m, MonadFix m) => TimeBits t -> UTCTime -> m (Dynamic t Bool)
 afterTime tbs tgt = do
-    -- One might be able to chain the events with 'switcher'
-    let te = traceEventWith (\t -> "Event at " ++ show t) . switch $ currentWaiting
-    (holdDyn False . fmap (const True)) =<< (onceE . ffilter (>= (timeSlice 0 tgt)) $ te)
+    prefix <- dissimilarPrefix 0 [(0, head tbs)] tbs
+    taE <- onceE . switch . pull . allGreater $ prefix
+    holdDyn False taE
   where
+    -- Check that all times are now greater then, 
+    allGreater :: [(Int, Dynamic t Integer)] -> PullM t (Event t Bool)
+    allGreater [] = error "unpossible, list was never empty"
+    -- When we get to the current time, we return always True rapidly.
+    allGreater [(_, a)] = return . fmap (const True) . updated $ a
+    allGreater ((s, a):t) = do
+      c <- sample . current $ a
+      if c >= timeSlice s tgt
+        then allGreater t
+        else return never
     -- Find the prefix of time bits to a time >=
     dissimilarPrefix :: (Reflex t, MonadSample t m1)
-                     => Int -> [Dynamic t Integer] -> [Dynamic t Integer] -> m1 [Dynamic t Integer]
+                     => Int -> [(Int, Dynamic t Integer)] -> [Dynamic t Integer] -> m1 [(Int, Dynamic t Integer)]
     dissimilarPrefix _ _ [] = error "Unpossible, its an infinite list!"
     dissimilarPrefix step pre (cur:rest) = do
       thisStep <- sample . current $ cur
       if thisStep >= (timeSlice step tgt)
         then return pre
-        else dissimilarPrefix (step+1) (cur:pre) rest
-    -- A behavior storing the event of the largest non >= time currently.
-    currentWaiting :: Behavior t (Event t Integer)
-    currentWaiting = pull $ do
-      -- drop till they're the same or greater.
-      prefix <- (fmap updated) <$> dissimilarPrefix 0 [] tbs
-      return . fromMaybe (updated . head $ tbs) . listToMaybe $ prefix
-
+        else dissimilarPrefix (step+1) ((step, cur):pre) rest
 
 -- | Efficiently fires an event at the target time, or immediately after.
 --   Fires instantly if the time is already past.
