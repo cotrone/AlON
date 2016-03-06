@@ -53,12 +53,10 @@ utc2TimeBits dt = (`map` [0..]) $ \b -> (timeSlice b) <$> dt
 timeSlice :: Int -> UTCTime -> Integer
 timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
 
--- | Uses a list of Dynamic bits from the UTCTime to change a Dynamic to True at the correct time, purely,
---   Using O(log n) operations.
+-- | Efficiently compare a target time with a timebits, becoming True at the chosen time.
 --
---   We find the dissimilar prefix of the times (with the caviate that the time might have already passed,
---   and thus the postfix is greater then), and that is the list of things that will have to change before our
---   time is reached. The list should be the length of the log of the difference of the times, making this efficient.
+--   We find a list of the postfixs of the time that show the target time isn't already past.
+--   The list should be the length of the log of the difference of the times, making this efficient.
 --
 --   This should be leap second resilient.
 afterTime :: forall t m. (Reflex t, MonadSample t m, MonadHold t m, MonadFix m) => TimeBits t -> UTCTime -> m (Dynamic t Bool)
@@ -67,7 +65,7 @@ afterTime tbs tgt = do
     taE <- onceE . switch . pull . allGreater $ prefix
     holdDyn False taE
   where
-    -- Check that all times are now greater then, 
+    -- Check that all times are now greater then,
     allGreater :: [(Int, Dynamic t Integer)] -> PullM t (Event t Bool)
     allGreater [] = error "unpossible, list was never empty"
     -- When we get to the current time, we return always True rapidly.
