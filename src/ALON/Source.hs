@@ -1,13 +1,15 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module ALON.Source (
-    time
+    TimeBits, utc2TimeBits, afterTime, atTime, time
   , DirTree, DataUpdate(..)
   , dirSource
   ) where
 
+import Data.Maybe
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
+import Control.Monad.Fix
 import qualified Data.Map as Map
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -31,9 +33,76 @@ import System.Directory
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Functor.Identity
+import qualified GHC.Event as GHC
+import Data.Bits
+import Data.Time.Clock.POSIX
 
 import ALON.Types
 
+-- | TimeBits is a list, each step containing the value of the time since the POSIX epoc, shifted over one.
+--   By using this, one can wait on the time changing more then a desired bit amount. To get a precise wait,
+--   one may then have to wait again on a finer bit possition. The head of the list stores the full time
+--   as picoseconds.
+type TimeBits t = [Dynamic t Integer]
+
+-- | Create a (lazy) list of Dynamics, each holding a the value of the bit of the POSIXTime in that possition.
+utc2TimeBits :: forall t. (Reflex t, Functor (Dynamic t)) => Dynamic t UTCTime -> TimeBits t
+utc2TimeBits dt = (`map` [0..]) $ \b -> (timeSlice b) <$> dt
+
+-- | Get the value of the UTCTime at the bit possition specified, and above.
+--   The conversion to Integer could be shared but would prevent code reuse.
+timeSlice :: Int -> UTCTime -> Integer
+timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
+
+-- | Uses a list of Dynamic bits from the UTCTime to change a Dynamic to True at the correct time, purely,
+--   Using O(log n) operations.
+--
+--   We find the dissimilar prefix of the times (with the caviate that the time might have already passed,
+--   and thus the postfix is greater then), and that is the list of things that will have to change before our
+--   time is reached. The list should be the length of the log of the difference of the times, making this efficient.
+--
+--   This should be leap second resilient.
+afterTime :: forall t m. (Reflex t, MonadSample t m, MonadHold t m, MonadFix m) => TimeBits t -> UTCTime -> m (Dynamic t Bool)
+afterTime tbs tgt = do
+    -- One might be able to chain the events with 'switcher'
+    let te = traceEventWith (\t -> "Event at " ++ show t) . switch $ currentWaiting
+    (holdDyn False . fmap (const True)) =<< (onceE . ffilter (>= (timeSlice 0 tgt)) $ te)
+  where
+    -- Find the prefix of time bits to a time >=
+    dissimilarPrefix :: (Reflex t, MonadSample t m1)
+                     => Int -> [Dynamic t Integer] -> [Dynamic t Integer] -> m1 [Dynamic t Integer]
+    dissimilarPrefix _ _ [] = error "Unpossible, its an infinite list!"
+    dissimilarPrefix step pre (cur:rest) = do
+      thisStep <- sample . current $ cur
+      if thisStep >= (timeSlice step tgt)
+        then return pre
+        else dissimilarPrefix (step+1) (cur:pre) rest
+    -- A behavior storing the event of the largest non >= time currently.
+    currentWaiting :: Behavior t (Event t Integer)
+    currentWaiting = pull $ do
+      -- drop till they're the same or greater.
+      prefix <- (fmap updated) <$> dissimilarPrefix 0 [] tbs
+      return . fromMaybe (updated . head $ tbs) . listToMaybe $ prefix
+
+
+-- | Efficiently fires an event at the target time, or immediately after.
+--   Fires instantly if the time is already past.
+--   
+--   Does not take into account leap seconds.
+atTime :: (Reflex t, MonadALON t m)
+        => UTCTime -> m (Event t ())
+atTime theTime = do
+  eq <- askEQ
+  e <- newEventWithTrigger $ \et -> do
+    tm <- GHC.getSystemTimerManager
+    now <- getCurrentTime
+    tk <- GHC.registerTimeout tm (max 0 . ceiling $ (theTime `diffUTCTime` now)*(10^(6::Int))) (atomically . writeTQueue eq $ (et :=> (Identity ())))
+    return $ GHC.unregisterTimeout tm tk
+  return e
+
+-- | Provides a Dynamic UTCTime signal at the desired resolution.
+--   
+--   Slight drift in the form of more time then the request difference between timesteps is expected.
 time :: (Reflex t, MonadALON t m)
      => DiffTime -> m (Dynamic t UTCTime)
 time dt = do
