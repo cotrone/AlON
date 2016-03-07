@@ -68,17 +68,16 @@ runProcess (RunExternal cmd args indata) = unsafePerformIO $ do
       --alonLogErrors . constDyn . pure $ "runProcess got Nothing for a handle."
       return undefined
 
-render :: forall t m k. (Reflex t, MonadALON t m, ToMustache k)
+render :: (Reflex t, ToMustache k, Functor (Dynamic t), Applicative (Dynamic t))
        => Text -> Dynamic t TemplateCache -> Dynamic t k
-       -> m (Dynamic t (Maybe Text))
-render nm t v = do
-  r <- (\f -> combineDyn f t v) $ \tc actV ->
-    case HM.lookup (T.unpack nm) tc of
-      Nothing -> ([mconcat ["Couldn't find template ", nm]], Nothing)
-      Just tmpl -> ([], Just . substitute tmpl $ actV)
-  (er, res) <- splitDyn r
-  alonLogErrors er
-  return res
+       -> Dynamic t Text
+render nm t v =
+    applyTemplate <$> t <*> v
+  where
+    applyTemplate tc actV =
+     case HM.lookup (T.unpack nm) tc of
+       Nothing -> "Couldn't find template " `T.append` nm
+       Just tmpl -> substitute tmpl $ actV
 
 dynBS2Text :: (Reflex t, Functor (Dynamic t)) => Dynamic t BS.ByteString -> Dynamic t Text
 dynBS2Text dt = TE.decodeUtf8 <$> dt
@@ -110,5 +109,18 @@ cacheTemplates srcs = do
   alonLogErrors errD
   mapDyn cacheFromList tsD
 
-apply2contents ::  (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t)) => (forall m'. (MonadSample t m', MonadIO m') => Dynamic t a -> m' (Dynamic t b)) -> Dynamic t (DirTree (Dynamic t a)) -> m (Dynamic t (DirTree (Dynamic t b)))
+
+apply2contents ::  (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t))
+               => (forall m'. (MonadSample t m', MonadIO m') => Dynamic t a -> m' (Dynamic t b))
+               -> Dynamic t (DirTree (Dynamic t a))
+               -> m (Dynamic t (DirTree (Dynamic t b)))
 apply2contents trans = mapDynMIO (traverse trans)
+
+{-
+apply2contents ::  (Reflex t, MonadHold t m, MonadHold t (PushM t), MonadHold t (PullM t))
+               => (forall m'. (MonadHold t m') =>
+                   Dynamic t a -> m' (Dynamic t b))
+               -> Dynamic t (DirTree (Dynamic t a))
+               -> m (Dynamic t (DirTree (Dynamic t b)))
+apply2contents trans d = do
+-}

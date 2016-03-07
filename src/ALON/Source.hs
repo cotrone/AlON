@@ -64,15 +64,14 @@ timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
 --   This should be leap second resilient.
 afterTime :: forall t m. (Reflex t, MonadSample t m, MonadHold t m, MonadFix m) => TimeBits t -> UTCTime -> m (Dynamic t Bool)
 afterTime tbs tgt = do
-    prefix <- dissimilarPrefix 0 [(0, head tbs)] tbs
+    prefix <- dissimilarPrefix 0 [] tbs
     taE <- onceE . switch . pull . allGreater $ prefix
     holdDyn False taE
   where
     -- Check that all times are now greater than the target time
     allGreater :: [(Int, Dynamic t Integer)] -> PullM t (Event t Bool)
-    allGreater [] = error "unpossible, list was never empty"
+    allGreater [] = return . fmap (const True) . updated . head $ tbs
     -- When we get to the current time, we return always True rapidly.
-    allGreater [(_, a)] = return . fmap (const True) . updated $ a
     allGreater ((s, a):t) = do
       c <- sample . current $ a
       if c >= timeSlice s tgt
