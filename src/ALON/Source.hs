@@ -38,17 +38,19 @@ import Data.Time.Clock.POSIX
 
 import ALON.Types
 
--- | TimeBits is a list, each step containing the value of the time since the POSIX epoc, shifted over one.
+-- | TimeBits is a list, each step containing the value of the time since the POSIX epoc,
+--   shifted right one more then the last.
 --   By using this, one can wait on the time changing more then a desired bit amount. To get a precise wait,
 --   one may then have to wait again on a finer bit possition. The head of the list stores the full time
 --   as picoseconds.
 type TimeBits t = [Dynamic t Integer]
 
--- | Create a (lazy) list of Dynamics, each holding a the value of the bit of the POSIXTime in that possition.
+-- | Create a (lazy) list of Dynamics, each holding a the value of the UTCTime right-shifted as many bits
+--   as there are elements before it in the list.
 utc2TimeBits :: forall t. (Reflex t, Functor (Dynamic t)) => Dynamic t UTCTime -> TimeBits t
-utc2TimeBits dt = (`map` [0..]) $ \b -> (timeSlice b) <$> dt
+utc2TimeBits dt = [timeSlice b <$> dt | b <- [0..]]
 
--- | Get the value of the UTCTime at the bit possition specified, and above.
+-- | Get the value of the UTCTime right-shifted the specified number of bits.
 --   The conversion to Integer could be shared but would prevent code reuse.
 timeSlice :: Int -> UTCTime -> Integer
 timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
@@ -66,7 +68,7 @@ afterTime tbs tgt = do
     taE <- onceE . switch . pull . allGreater $ prefix
     holdDyn False taE
   where
-    -- Check that all times are now greater then,
+    -- Check that all times are now greater than the target time
     allGreater :: [(Int, Dynamic t Integer)] -> PullM t (Event t Bool)
     allGreater [] = error "unpossible, list was never empty"
     -- When we get to the current time, we return always True rapidly.
