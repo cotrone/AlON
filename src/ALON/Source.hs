@@ -40,9 +40,9 @@ import ALON.Types
 
 -- | TimeBits is a list, each step containing the value of the time since the POSIX epoc,
 --   shifted right one more then the last.
---   By using this, one can wait on the time changing more then a desired bit amount. To get a precise wait,
---   one may then have to wait again on a finer bit possition. The head of the list stores the full time
---   as picoseconds.
+--   By using this, one can wait on the time changing more then a desired picosecond*2^Nat amount.
+--   To get a precise wait, one may then have to wait again on a finer time counter.
+--   The head of the list stores the full time as picoseconds since the unix epoch.
 type TimeBits t = [Dynamic t Integer]
 
 -- | Create a (lazy) list of Dynamics, each holding a the value of the UTCTime right-shifted as many bits
