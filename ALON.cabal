@@ -42,7 +42,7 @@ library
       , monad-loops
       , dependent-sum
       , reflex
-      , reflex-orphans
+      , reflex-orphans >= 0.1.0.2
       , fsnotify
       , list-tries
       , filepath
