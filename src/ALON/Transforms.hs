@@ -90,7 +90,7 @@ cacheTemplates :: forall t m. (Reflex t, MonadALON t m, Functor (Dynamic t), App
                -> m (Dynamic t TemplateCache)
 cacheTemplates srcTree = do
     alonLogErrors errorResults
-    return $ flattenPartials <$> templCache
+    return templCache
   where
     toMPath :: [Text] -> FilePath
     toMPath = FP.joinPath . fmap T.unpack
@@ -104,7 +104,12 @@ cacheTemplates srcTree = do
     tmplList = foldlDynDynList (\cache -> either (const cache) (:cache)) (constDyn []) compiledList
 
     templCache :: Dynamic t TemplateCache
-    templCache = fmap cacheFromList tmplList
+    templCache = fmap (linkPartials . flattenPartials . cacheFromList) tmplList
+
+    linkPartials :: TemplateCache -> TemplateCache
+    linkPartials tc0 =
+      let tc = fmap (\t -> t {partials = tc}) tc0
+      in tc
 
     errorResults :: Dynamic t [Text]
     errorResults =
