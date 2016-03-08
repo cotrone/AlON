@@ -85,7 +85,7 @@ utf8DecodeDirTree = apply2contents TE.decodeUtf8
 flattenPartials :: TemplateCache -> TemplateCache
 flattenPartials m = HM.foldrWithKey (HM.insertWith (\_ b -> b)) m m
 
-cacheTemplates :: forall t m. (Reflex t, MonadALON t m, MonadIO (PushM t), MonadIO (PullM t), Functor (Dynamic t), Applicative (Dynamic t))
+cacheTemplates :: forall t m. (Reflex t, MonadALON t m, Functor (Dynamic t), Applicative (Dynamic t))
                => Dynamic t (DirTree (Dynamic t T.Text))
                -> m (Dynamic t TemplateCache)
 cacheTemplates srcTree = do
