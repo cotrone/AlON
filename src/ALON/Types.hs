@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables, FlexibleInstances, MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
 module ALON.Types (
-    ALONT(unALON), ALON, MonadALON(..), mapDynMIO
+    ALONT(unALON), ALON, MonadALON(..)
   ) where
 
 import Data.Text (Text)
@@ -42,12 +42,3 @@ instance (Monad m, MonadIO m, Reflex t, ReflexHost t, MonadFix m, MonadHold t m,
   alonLogErrors ne = do
     get >>= (mconcatDyn . (:[ne])) >>= put
   askEQ = ALON ask
-
-mapDynMIO :: forall t m a b. (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t)) => (forall m'. (MonadSample t m', MonadIO m') => a -> m' b) -> Dynamic t a -> m (Dynamic t b)
-mapDynMIO f d = do
-  let e' = push (liftM Just . f :: a -> PushM t (Maybe b)) $ updated d
-      eb' = fmap constant e'
-      v0 = pull $ f =<< sample (current d)
-  bb' :: Behavior t (Behavior t b) <- hold v0 eb'
-  let b' = pull $ sample =<< sample bb'
-  return $ unsafeDynamic b' e'

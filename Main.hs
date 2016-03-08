@@ -3,14 +3,10 @@ module Main where
 
 import Control.Monad.Trans
 import Data.Time
-import qualified Data.ListTrie.Patricia.Map.Ord as LT
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
 import Network.Wai.Handler.Warp (defaultSettings)
 import ALON.Source
 import ALON.Manipulation
 import ALON.Run
-import ALON.Types
 import ALON.WebServer
 import ALON.Transforms
 

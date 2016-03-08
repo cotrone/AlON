@@ -1,12 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes #-}
 module ALON.Transforms (
     runProcess, RunExternal(..)
-  , apply2contents
+  , utf8DecodeDirTree
   , cacheTemplates
   , render
   ) where
 
-import Control.Monad
 import Control.Monad.Trans
 import qualified System.FilePath as FP
 import qualified Data.ByteString as BS
@@ -79,48 +78,37 @@ render nm t v =
        Nothing -> "Couldn't find template " `T.append` nm
        Just tmpl -> substitute tmpl $ actV
 
-dynBS2Text :: (Reflex t, Functor (Dynamic t)) => Dynamic t BS.ByteString -> Dynamic t Text
-dynBS2Text dt = TE.decodeUtf8 <$> dt
+utf8DecodeDirTree :: (Reflex t, Functor (Dynamic t))
+                  => Dynamic t (DirTree (Dynamic t BS.ByteString)) -> Dynamic t (DirTree (Dynamic t T.Text))
+utf8DecodeDirTree = apply2contents TE.decodeUtf8
 
-cacheTemplates :: forall t m. (Reflex t, MonadALON t m, MonadIO (PushM t), MonadIO (PullM t), Functor (Dynamic t))
-               => [Dynamic t (DirTree (Dynamic t BS.ByteString))]
+flattenPartials :: TemplateCache -> TemplateCache
+flattenPartials m = HM.foldrWithKey (HM.insertWith (\_ b -> b)) m m
+
+cacheTemplates :: forall t m. (Reflex t, MonadALON t m, MonadIO (PushM t), MonadIO (PullM t), Functor (Dynamic t), Applicative (Dynamic t))
+               => Dynamic t (DirTree (Dynamic t T.Text))
                -> m (Dynamic t TemplateCache)
-cacheTemplates srcs = do
-  let templateSrcTrees::[Dynamic t (DirTree (Dynamic t Text))] =
-                   fmap (fmap (fmap dynBS2Text)) srcs
-  let compiledTrees::[Dynamic t (DirTree (Dynamic t (Either ([Text], ParseError) Template)))] =
-                fmap (mapDynTreeWithKey (\p dt ->
-                       (first ((,) p) . compileTemplate (FP.joinPath . fmap T.unpack $ p) $ dt)))
-                     templateSrcTrees
-  tmplList::Dynamic t [Dynamic t (Either ([Text], ParseError) Template)] <-
-           mconcatDyn compiledTrees >>= mapDyn (map snd . LT.toList)
-  (esD::Dynamic t [([Text], ParseError)], tsD::Dynamic t [Template]) <- splitDyn =<<
-     ((`mapDynM` tmplList) $ \tl ->
-       foldM (\(es, ts) etd -> do
-                  et <- sample . current $ etd
-                  return $ case et of
-                             Left pe -> (pe:es, ts)
-                             Right t -> (es, t:ts))
-        ([]::[([Text], ParseError)], []::[Template]) tl)
-  errD <- forDyn esD . map $ \(p, e) -> mconcat
-            [ T.intercalate "/" p, " : ", T.pack . show . errorPos $ e, " - "
-            , T.intercalate "\n" . map (T.pack . messageString) . errorMessages $ e
-            , "\n" ]
-  alonLogErrors errD
-  mapDyn cacheFromList tsD
+cacheTemplates srcTree = do
+    alonLogErrors errorResults
+    return $ flattenPartials <$> templCache
+  where
+    toMPath :: [Text] -> FilePath
+    toMPath = FP.joinPath . fmap T.unpack
+    compiledList :: Dynamic t [Dynamic t (Either ([Text], ParseError) Template)]
+    compiledList =
+     fmap (fmap (\(p, dt) -> (first ((,) p) . compileTemplate (toMPath p)) <$> dt) . LT.toList) $ srcTree
 
+    errorList :: Dynamic t [([Text], ParseError)]
+    errorList = foldlDynDynList (\cache -> either (:cache) (const cache)) (constDyn []) compiledList
+    tmplList :: Dynamic t [Template]
+    tmplList = foldlDynDynList (\cache -> either (const cache) (:cache)) (constDyn []) compiledList
 
-apply2contents ::  (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t))
-               => (forall m'. (MonadSample t m', MonadIO m') => Dynamic t a -> m' (Dynamic t b))
-               -> Dynamic t (DirTree (Dynamic t a))
-               -> m (Dynamic t (DirTree (Dynamic t b)))
-apply2contents trans = mapDynMIO (traverse trans)
+    templCache :: Dynamic t TemplateCache
+    templCache = fmap cacheFromList tmplList
 
-{-
-apply2contents ::  (Reflex t, MonadHold t m, MonadHold t (PushM t), MonadHold t (PullM t))
-               => (forall m'. (MonadHold t m') =>
-                   Dynamic t a -> m' (Dynamic t b))
-               -> Dynamic t (DirTree (Dynamic t a))
-               -> m (Dynamic t (DirTree (Dynamic t b)))
-apply2contents trans d = do
--}
+    errorResults :: Dynamic t [Text]
+    errorResults =
+      fmap (fmap (\(p, e) -> mconcat
+        [ T.intercalate "/" p, " : ", T.pack . show . errorPos $ e, " - "
+        , T.intercalate "\n" . map (T.pack . messageString) . errorMessages $ e
+        , "\n" ])) errorList
