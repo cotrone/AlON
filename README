@@ -1,0 +1,19 @@
+AlON - incremental website regeneration as data changes, focused on CDN-awareness
+----------
+
+The concept of "Dynamic" and "Static" sites are not binary, they exist as two ends of a continuum.
+Most site frameworks exist to service one end of this continuum complete. For example jekyll or hakyll are just static site generators - when anything changes you have to run them again to generate a new site. They can't inherently understand the concept of a post that goes live at a pre-specified time or anything else slightly dynamic in nature. A framework like snap is entirely dynamic and produces the reply entirely each time with no inherent concept of something not having changed; thoguht you can write things in it to short circute the dynamic generation in special cases.
+
+Sometimes you want something that understands the in between. AlON does incremental, minimal, website regeneration as data or conditions change.
+
+AlON reads from data sources that you can get the current state of and subscribe to changes from, such as:
+
+ dirSource: A directory structure (via inotify/FSEvents).
+  time: The current time.
+   gitDir: The most recent commit in a specific repository's branch's Tree. (Not yet implemented)
+
+AlON then transforms this data into a site, via your Haskell specification, automatically tracking what was required to generate each result. When some of the source data for a specific result changes, AlON regenerates just those results that are affected. Further, knowing exactly what changes when, AlON can send a minimal set of invalidations to a CDN, selecting an optimal set of invalidation commands based on the change set and the CDN's API usage policy.
+
+AlON allows "dynamic" type site additions via WAI plugins. From such plugins people on the web could manipulate AlON data sources, causing AlON to regenerate the site. Additionally, truly "dynamic" actions, such as random redirects, can be implemented similarly.
+
+One could reasonably build something like Hackage or a blog (with comments) on AlON, but using it to implement reddit would be suboptimal.
