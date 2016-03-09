@@ -82,9 +82,6 @@ utf8DecodeDirTree :: (Reflex t, Functor (Dynamic t))
                   => Dynamic t (DirTree (Dynamic t BS.ByteString)) -> Dynamic t (DirTree (Dynamic t T.Text))
 utf8DecodeDirTree = apply2contents TE.decodeUtf8
 
-flattenPartials :: TemplateCache -> TemplateCache
-flattenPartials m = HM.foldrWithKey (HM.insertWith (\_ b -> b)) m m
-
 cacheTemplates :: forall t m. (Reflex t, MonadALON t m, Functor (Dynamic t), Applicative (Dynamic t))
                => Dynamic t (DirTree (Dynamic t T.Text))
                -> m (Dynamic t TemplateCache)
@@ -104,7 +101,7 @@ cacheTemplates srcTree = do
     tmplList = foldlDynDynList (\cache -> either (const cache) (:cache)) (constDyn []) compiledList
 
     templCache :: Dynamic t TemplateCache
-    templCache = fmap (linkPartials . flattenPartials . cacheFromList) tmplList
+    templCache = fmap (linkPartials . cacheFromList) tmplList
 
     linkPartials :: TemplateCache -> TemplateCache
     linkPartials tc0 =
