@@ -1,4 +1,4 @@
-AlON - incremental website regeneration as data changes
+AlON - minimally dynamic web framework
 ----------
 
 AlON is targeted at high traffic sites with content that changes gradually, such as webcomics, blogs, and news sites.
