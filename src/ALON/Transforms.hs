@@ -30,7 +30,18 @@ import ALON.Source
 import ALON.Manipulation
 import ALON.Types
 
--- | Take  TimeBits, and a DirTree. Assuming that the first 
+-- | Take  TimeBits, and a DirTree. Assuming that the first path segment is a
+--   UTCTime, encoded as ISO 8601, results in a DynDirTree pressenting only
+--   elements who's key starts with a UTCTime not in the future of the pressent time.
+--
+--   Entries with invalid dates are dropped.
+--
+--   Examples of accepted ISO 8601 formats are:
+--     - 2016-03-18 (Taken to mean the earliest time on said day)
+--     - 2016-03-18T05:27:04Z
+--     - 2016-03-18T05:27:04+00:00
+--     - 2016-03-18T05:27:04+04:00
+--     - 2016-W11-5 (Meaning the Friday of the 11th week of 2016, specificly 2016-03-18)
 --timeGatedDir :: Reflex t => TimeBits t -> DynDirTree t a -> DynDirTree t a
 
 data RunExternal =
