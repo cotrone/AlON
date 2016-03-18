@@ -42,6 +42,10 @@ import ALON.Types
 --     - 2016-03-18T05:27:04+00:00
 --     - 2016-03-18T05:27:04+04:00
 --     - 2016-W11-5 (Meaning the Friday of the 11th week of 2016, specificly 2016-03-18)
+--
+--   Once an entry has gone live, it should not stop being available.
+--   The specific affect of this is that you may see an entry with an apparently future
+--   time during a leap second where the clock jumps backwards.
 --timeGatedDir :: Reflex t => TimeBits t -> DynDirTree t a -> DynDirTree t a
 
 data RunExternal =
