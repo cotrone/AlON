@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module ALON.Source (
     TimeBits, utc2TimeBits, afterTime, atTime, time
-  , DirTree, DataUpdate(..)
+  , DirTree, DynDirTree, DataUpdate(..)
   , dirSource
   ) where
 
@@ -120,13 +120,19 @@ time dt = do
 
 type DirTree a = TrieMap Text a
 
+-- | Our basic ALON type for, representing at turns directories and site URL heirarchies.
+--   In the future, we might make a special version of this type like 'Euhoria''s
+--   <http://hackage.haskell.org/package/euphoria-0.6.0.1/docs/FRP-Euphoria-Collection.html Collection>
+--   for more efficient updating.
+type DynDirTree t a = Dynamic t (DirTree (Dynamic t a))
+
 data DataUpdate =
     DataMod ByteString
   | DataDel
   deriving (Eq, Ord, Show)
 
 dirSource :: (Reflex t, MonadALON t m)
-          => FP.FilePath -> m (Dynamic t (DirTree (Dynamic t ByteString)))
+          => FP.FilePath -> m (DynDirTree t ByteString)
 dirSource dir = do
     eq <- askEQ
     de <- newEventWithTrigger $ \et -> do

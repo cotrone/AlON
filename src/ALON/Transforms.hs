@@ -30,6 +30,9 @@ import ALON.Source
 import ALON.Manipulation
 import ALON.Types
 
+-- | Take  TimeBits, and a DirTree. Assuming that the first 
+--timeGatedDir :: Reflex t => TimeBits t -> DynDirTree t a -> DynDirTree t a
+
 data RunExternal =
   RunExternal {
       reCmd :: FilePath
@@ -79,12 +82,11 @@ render nm t v =
        Just tmpl -> substitute tmpl $ actV
 
 utf8DecodeDirTree :: (Reflex t, Functor (Dynamic t))
-                  => Dynamic t (DirTree (Dynamic t BS.ByteString)) -> Dynamic t (DirTree (Dynamic t T.Text))
+                  => DynDirTree t BS.ByteString -> DynDirTree t T.Text
 utf8DecodeDirTree = apply2contents TE.decodeUtf8
 
 cacheTemplates :: forall t m. (Reflex t, MonadALON t m, Functor (Dynamic t), Applicative (Dynamic t))
-               => Dynamic t (DirTree (Dynamic t T.Text))
-               -> m (Dynamic t TemplateCache)
+               => DynDirTree t T.Text -> m (Dynamic t TemplateCache)
 cacheTemplates srcTree = do
     alonLogErrors errorResults
     return templCache

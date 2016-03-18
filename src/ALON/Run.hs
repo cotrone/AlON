@@ -26,7 +26,7 @@ import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
 
-type SiteResult t = Dynamic t (DirTree (Dynamic t ByteString))
+type SiteResult t = DynDirTree t ByteString
 
 type AlONSite =
   forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t), MonadIO (PushM t), MonadIO (PullM t), Functor (Behavior t), Applicative (Behavior t), Functor (Dynamic t), Applicative (Dynamic t)) =>
