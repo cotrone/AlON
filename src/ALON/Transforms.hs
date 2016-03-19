@@ -79,16 +79,6 @@ timeGatedDir tbs super = do
           isTime <- sample . current $ tg
           return $ if isTime then Just el else Nothing 
 
-    gatedListTree :: m (Dynamic t [Dynamic t (Maybe ([Text], Dynamic t a))])
-    gatedListTree = mapDynMHold (mapM (\(k, v) ->
-                                   let mTime = headMay k >>= parseGateTime
-                                   in case mTime of
-                                     Nothing -> return $ constDyn Nothing
-                                     Just time -> (fmap (\timePassed -> if timePassed
-                                                                  then Just (k, v)
-                                                                  else Nothing)) <$> afterTime tbs time
-                                     )) dynListTree
-
 parseGateTime :: T.Text -> Maybe UTCTime
 parseGateTime t =
     headMay . mapMaybe (\f -> parseTimeM False defaultTimeLocale f s) $ timeFormats
