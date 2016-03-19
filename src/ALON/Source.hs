@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, RecursiveDo #-}
 module ALON.Source (
     TimeBits, utc2TimeBits, afterTime, afterTimeSpec, atTime, time
   , DirTree, DynDirTree, DataUpdate(..)
@@ -65,7 +65,7 @@ afterTimeSpec (curTime, _) tgtTime = do
       holdDyn False =<< (onceE . ffilter (==True) . updated $ (((<) tgtTime) <$> curTime))
 
 -- | Efficiently compare a target time with a timebits, becoming True at the chosen time.
---   This means that, until right before the the target time, almost all events are skipped.
+--   O(log2 (then - now)) tests against the time while waiting to become true.
 --
 --   We find a list of the postfixs of the time that show the target time isn't already past.
 --   The list should be the length of the log of the difference of the times, making this efficient.
@@ -78,27 +78,37 @@ afterTime (curTime, tbs) tgt = do
       True -> return . constDyn $ True
       False -> do
         prefix <- dissimilarPrefix 0 [] tbs
-        -- The switch causes a one-step delay on firing!
-        holdDyn False =<< (onceE . switch . pull . allGreater $ prefix)
+        -- onceE to avoid reprocessing once True.
+        holdDyn False =<< onceE =<< (allGreater $ prefix)
   where
-    -- Check that all times are now greater than the target time
-    allGreater :: [(Int, Dynamic t Integer)] -> PullM t (Event t Bool)
-    allGreater [] = return . fmap (const True) . updated . head $ tbs
-    -- When we get to the current time, we return always True rapidly.
-    allGreater ((s, a):t) = do
-      c <- sample . current $ a
-      if c >= timeSlice s tgt
-        then allGreater t
-        else return never
+    -- Check that each step of the time is now greater then or equal to the time,
+    -- switching promptly to the next step in the chain each time,
+    -- and firing  when the time is >=.
+    allGreater :: [Event t Integer] -> m (Event t Bool)
+    allGreater [] =
+      -- Since TimeBits changed, the curTime component had to fire.
+      -- Thus we can generatea firing event off it.
+      -- Since we got here, we know nothing in the list differs so we're definately True.
+      return . fmap (const True) . updated $ curTime
+    -- Process each potential difference one step at a time, moving to the next step when it has become True.
+    allGreater (cstep:t) = do
+      -- We need what the event for the next step would be.
+      nstep <- allGreater t
+      -- whenever this step fires, we want to become that next step.
+      switchPromptly never . fmap (const nstep) $ cstep
+
     -- Find the prefix of time bits to a time >=
     dissimilarPrefix :: (Reflex t, MonadSample t m1)
-                     => Int -> [(Int, Dynamic t Integer)] -> [Dynamic t Integer] -> m1 [(Int, Dynamic t Integer)]
+                     => Int -> [Event t Integer] -> [Dynamic t Integer] -> m1 [Event t Integer]
     dissimilarPrefix _ _ [] = error "Unpossible, its an infinite list!"
     dissimilarPrefix step pre (cur:rest) = do
       thisStep <- sample . current $ cur
-      if thisStep >= (timeSlice step tgt)
+      let whatThisStepShouldBe = timeSlice step tgt
+      if thisStep >= whatThisStepShouldBe
         then return pre
-        else dissimilarPrefix (step+1) ((step, cur):pre) rest
+        else 
+        let fireWhenTargetOrGreater = ffilter (\tStep -> tStep >= whatThisStepShouldBe) . updated $ cur
+        in dissimilarPrefix (step+1) (fireWhenTargetOrGreater:pre) rest
 
 -- | Efficiently fires an event at the target time, or immediately after.
 --   Fires instantly if the time is already past.

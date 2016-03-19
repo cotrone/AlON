@@ -179,8 +179,8 @@ alonUpdateTests =
         False
         [ (Nothing, Nothing, False)
         , (Just . posixSecondsToUTCTime $ 1, Nothing, False)
-        , (Just . posixSecondsToUTCTime $ 4, Nothing, False) -- Why doesn't it fire here?
-        , (Just . posixSecondsToUTCTime $ 5, Just True, True)
+        , (Just . posixSecondsToUTCTime $ 4, Just True, True)
+        , (Just . posixSecondsToUTCTime $ 5, Nothing, True)
         , (Just . posixSecondsToUTCTime $ 6, Nothing, True)
         , (Just . posixSecondsToUTCTime $ 3, Nothing, True)
         ]
@@ -197,7 +197,7 @@ alonUpdateTests =
       , testALONCase "test afterTimeSpec starting after" (\e -> do
                                           tbs <- utc2TimeBits <$> holdDyn (posixSecondsToUTCTime 5) e
                                           afterTime tbs . posixSecondsToUTCTime $ 4)
-        False
+        True
         [ (Just . posixSecondsToUTCTime $ 5, Nothing, True)
         , (Just . posixSecondsToUTCTime $ 6, Nothing, True)
         , (Just . posixSecondsToUTCTime $ 3, Nothing, True)
