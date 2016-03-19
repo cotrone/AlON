@@ -8,6 +8,7 @@ module ALON.Transforms (
   ) where
 
 import Control.Monad.Trans
+import Control.Monad.Fix
 import qualified System.FilePath as FP
 import qualified Data.ByteString as BS
 import Data.Text (Text)
@@ -15,6 +16,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Time
+import Data.Traversable
 import Data.Maybe
 import Text.Mustache
 import Text.Mustache.Types
@@ -54,7 +56,38 @@ import ALON.Types
 --   Once an entry has gone live, it should not stop being available.
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
---timeGatedDir :: Reflex t => TimeBits t -> DynDirTree t a -> DynDirTree t a
+timeGatedDir :: forall t m a
+              . (Reflex t, MonadHold t m, Functor (Dynamic t), MonadHold t (PullM t), MonadFix (PullM t))
+             => TimeBits t -> DynDirTree t a -> m (DynDirTree t a)
+timeGatedDir tbs super = do
+    mapDynMHold (fmap LT.fromList . filterByTime) dynListTree
+  where
+    dynListTree :: Dynamic t [([Text], Dynamic t a)]
+    dynListTree = LT.toList <$> super
+
+    filterByTime :: (MonadSample t m', MonadHold t m', MonadFix m')
+                 => [([Text], Dynamic t a)] -> m' [([Text], Dynamic t a)]
+    filterByTime = fmap catMaybes . mapM filterElem
+    filterElem :: (MonadSample t m', MonadHold t m', MonadFix m')
+               => ([Text], Dynamic t a) -> m' (Maybe ([Text], Dynamic t a))
+    filterElem el = do
+      let mTime = headMay (fst el) >>= parseGateTime
+      case mTime of
+        Nothing -> return Nothing
+        Just time -> do
+          tg <- afterTime tbs time
+          isTime <- sample . current $ tg
+          return $ if isTime then Just el else Nothing 
+
+    gatedListTree :: m (Dynamic t [Dynamic t (Maybe ([Text], Dynamic t a))])
+    gatedListTree = mapDynMHold (mapM (\(k, v) ->
+                                   let mTime = headMay k >>= parseGateTime
+                                   in case mTime of
+                                     Nothing -> return $ constDyn Nothing
+                                     Just time -> (fmap (\timePassed -> if timePassed
+                                                                  then Just (k, v)
+                                                                  else Nothing)) <$> afterTime tbs time
+                                     )) dynListTree
 
 parseGateTime :: T.Text -> Maybe UTCTime
 parseGateTime t =
