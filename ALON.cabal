@@ -41,6 +41,7 @@ library
       , unordered-containers
       , monad-loops
       , dependent-sum
+      , dependent-map
       , reflex
       , reflex-orphans >= 0.1.0.2
       , fsnotify
@@ -65,7 +66,6 @@ library
       , parsec
       , mustache
       , process >= 1.4.0.0
-      , dependent-map
       , safe
 
 executable test
@@ -81,9 +81,14 @@ executable test
       , dependent-sum
       , time
       , reflex
+      , ref-tf
+      , dependent-map
       , list-tries
       , system-filepath
       , bytestring
       , monad-loops
       , warp
       , text
+      , test-framework >= 0.8
+      , test-framework-hunit >= 0.3
+      , HUnit >= 1.3

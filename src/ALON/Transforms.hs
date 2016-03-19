@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes #-}
 module ALON.Transforms (
-    parseGateTime
+    timeGatedDir, parseGateTime
   , runProcess, RunExternal(..)
   , utf8DecodeDirTree
   , cacheTemplates
@@ -16,7 +16,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Time
-import Data.Traversable
 import Data.Maybe
 import Text.Mustache
 import Text.Mustache.Types
@@ -74,8 +73,8 @@ timeGatedDir tbs super = do
       let mTime = headMay (fst el) >>= parseGateTime
       case mTime of
         Nothing -> return Nothing
-        Just time -> do
-          tg <- afterTime tbs time
+        Just tgtTime -> do
+          tg <- afterTime tbs tgtTime
           isTime <- sample . current $ tg
           return $ if isTime then Just el else Nothing 
 

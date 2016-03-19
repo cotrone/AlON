@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module ALON.Source (
-    TimeBits, utc2TimeBits, afterTime, atTime, time
+    TimeBits, utc2TimeBits, afterTime, afterTimeSpec, atTime, time
   , DirTree, DynDirTree, DataUpdate(..)
   , dirSource
   ) where
@@ -54,6 +54,15 @@ utc2TimeBits dt = [timeSlice b <$> dt | b <- [0..]]
 --   The conversion to Integer could be shared but would prevent code reuse.
 timeSlice :: Int -> UTCTime -> Integer
 timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
+
+afterTimeSpec :: (Reflex t, MonadHold t m, MonadFix m, Functor (Dynamic t))
+              => Dynamic t UTCTime -> UTCTime -> m (Dynamic t Bool)
+afterTimeSpec curTime tgtTime = do
+  n <- sample . current $ curTime
+  case tgtTime <= n of
+    True -> return . constDyn $ True
+    False ->
+      holdDyn False =<< (onceE . ffilter (==True) . updated $ (((<) tgtTime) <$> curTime))
 
 -- | Efficiently compare a target time with a timebits, becoming True at the chosen time.
 --   This means that, until right before the the target time, almost all events are skipped.
