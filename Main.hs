@@ -2,6 +2,7 @@
 module Main where
 
 import Control.Monad
+import Control.Monad.Fix
 import Control.Monad.Trans
 import qualified Control.Exception as E
 import Data.Bits
@@ -48,6 +49,15 @@ main = do
       let pt = mapDynTreeWithKey (\_ ds -> snd . runProcess $ (RunExternal "dc" [] ds)) mt
       rt <- mergeDynTree pt dt
       return rt
+
+afterTimeSpec :: (Reflex t, MonadHold t m, MonadFix m, Functor (Dynamic t))
+              => TimeBits t -> UTCTime -> m (Dynamic t Bool)
+afterTimeSpec (curTime, _) tgtTime = do
+  n <- sample . current $ curTime
+  case tgtTime <= n of
+    True -> return . constDyn $ True
+    False ->
+      holdDyn False =<< (onceE . ffilter (==True) . updated $ (((<) tgtTime) <$> curTime))
 
 tests :: [Test]
 tests =
