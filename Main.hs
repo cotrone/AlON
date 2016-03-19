@@ -127,21 +127,26 @@ alonUpdateTests :: Test
 alonUpdateTests =
     testGroup "ALON update tests" $
       [ testALONCase "test utc2TimeBits" (\e -> do
-                                             tbs <- utc2TimeBits <$> holdDyn (posixSecondsToUTCTime 0) e
+                                             (t, tbs) <- utc2TimeBits <$> holdDyn (posixSecondsToUTCTime 0) e
                                              -- We drop 12 because POSIX time is in terms of seconds.
-                                             return . sequenceA . take 28 . drop 12 $ tbs)
-        (take 28 . repeat $ 0) $
+                                             let dbs = sequenceA . take 28 . drop 12 $ tbs
+                                             return $ (,) <$> t <*> dbs)
+        (posixSecondsToUTCTime 0, take 28 . repeat $ 0) $
           let second1  = [1000000000000 `shiftR` b | b <- [12..39]]
               second2  = [2000000000000 `shiftR` b | b <- [12..39]]
               second60 = [60000000000000 `shiftR` b | b <- [12..39]]
-          in [ (Nothing, Nothing, take 28 . repeat $ 0)
-             , (Just (posixSecondsToUTCTime 1), Just second1, second1)
-             , (Just (posixSecondsToUTCTime 2), Just second2, second2)
-             , (Just (posixSecondsToUTCTime 60), Just second60, second60)
+          in [ (Nothing, Nothing
+                       , (posixSecondsToUTCTime 0, take 28 . repeat $ 0))
+             , (Just (posixSecondsToUTCTime 1), Just (posixSecondsToUTCTime 1, second1)
+                                              , (posixSecondsToUTCTime 1, second1))
+             , (Just (posixSecondsToUTCTime 2), Just (posixSecondsToUTCTime 2, second2)
+                                              , (posixSecondsToUTCTime 2, second2))
+             , (Just (posixSecondsToUTCTime 60), Just (posixSecondsToUTCTime 60, second60)
+                                               , (posixSecondsToUTCTime 60, second60))
              ]
       , testALONCase "test afterTimeSpec" (\e -> do
-                                          t <- holdDyn (posixSecondsToUTCTime 0) e
-                                          afterTimeSpec t . posixSecondsToUTCTime $ 4)
+                                          tbs <- utc2TimeBits <$> holdDyn (posixSecondsToUTCTime 0) e
+                                          afterTimeSpec tbs . posixSecondsToUTCTime $ 4)
         False
         [ (Nothing, Nothing, False)
         , (Just . posixSecondsToUTCTime $ 1, Nothing, False)
@@ -151,8 +156,8 @@ alonUpdateTests =
         , (Just . posixSecondsToUTCTime $ 3, Nothing, True)
         ]
       , testALONCase "test afterTimeSpec skipping" (\e -> do
-                                          t <- holdDyn (posixSecondsToUTCTime 0) e
-                                          afterTimeSpec t . posixSecondsToUTCTime $ 4)
+                                          tbs <- utc2TimeBits <$> holdDyn (posixSecondsToUTCTime 0) e
+                                          afterTimeSpec tbs . posixSecondsToUTCTime $ 4)
         False
         [ (Nothing, Nothing, False)
         , (Just . posixSecondsToUTCTime $ 1, Nothing, False)
@@ -161,8 +166,8 @@ alonUpdateTests =
         , (Just . posixSecondsToUTCTime $ 3, Nothing, True)
         ]
       , testALONCase "test afterTimeSpec starting after" (\e -> do
-                                          t <- holdDyn (posixSecondsToUTCTime 5) e
-                                          afterTimeSpec t . posixSecondsToUTCTime $ 4)
+                                          tbs <- utc2TimeBits <$> holdDyn (posixSecondsToUTCTime 5) e
+                                          afterTimeSpec tbs . posixSecondsToUTCTime $ 4)
         True
         [ (Just . posixSecondsToUTCTime $ 5, Nothing, True)
         , (Just . posixSecondsToUTCTime $ 6, Nothing, True)

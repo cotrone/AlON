@@ -43,12 +43,12 @@ import ALON.Types
 --   By using this, one can wait on the time changing more then a desired picosecond*2^Nat amount.
 --   To get a precise wait, one may then have to wait again on a finer time counter.
 --   The head of the list stores the full time as picoseconds since the unix epoch.
-type TimeBits t = [Dynamic t Integer]
+type TimeBits t = (Dynamic t UTCTime, [Dynamic t Integer])
 
 -- | Create a (lazy) list of Dynamics, each holding a the value of the UTCTime right-shifted as many bits
 --   as there are elements before it in the list.
 utc2TimeBits :: forall t. (Reflex t, Functor (Dynamic t)) => Dynamic t UTCTime -> TimeBits t
-utc2TimeBits dt = [timeSlice b <$> dt | b <- [0..]]
+utc2TimeBits dt = (dt, [timeSlice b <$> dt | b <- [0..]])
 
 -- | Get the value of the UTCTime right-shifted the specified number of bits.
 --   The conversion to Integer could be shared but would prevent code reuse.
@@ -56,8 +56,8 @@ timeSlice :: Int -> UTCTime -> Integer
 timeSlice b = (`shiftR` b) . floor . (* 10^(12::Int)) . utcTimeToPOSIXSeconds
 
 afterTimeSpec :: (Reflex t, MonadHold t m, MonadFix m, Functor (Dynamic t))
-              => Dynamic t UTCTime -> UTCTime -> m (Dynamic t Bool)
-afterTimeSpec curTime tgtTime = do
+              => TimeBits t -> UTCTime -> m (Dynamic t Bool)
+afterTimeSpec (curTime, _) tgtTime = do
   n <- sample . current $ curTime
   case tgtTime <= n of
     True -> return . constDyn $ True
@@ -72,10 +72,14 @@ afterTimeSpec curTime tgtTime = do
 --
 --   This should be leap second resilient.
 afterTime :: forall t m. (Reflex t, MonadSample t m, MonadHold t m, MonadFix m) => TimeBits t -> UTCTime -> m (Dynamic t Bool)
-afterTime tbs tgt = do
-    prefix <- dissimilarPrefix 0 [] tbs
-    taE <- onceE . switch . pull . allGreater $ prefix
-    holdDyn False taE
+afterTime (curTime, tbs) tgt = do
+    n <- sample . current $ curTime
+    case tgt <= n of
+      True -> return . constDyn $ True
+      False -> do
+        prefix <- dissimilarPrefix 0 [] tbs
+        -- The switch causes a one-step delay on firing!
+        holdDyn False =<< (onceE . switch . pull . allGreater $ prefix)
   where
     -- Check that all times are now greater than the target time
     allGreater :: [(Int, Dynamic t Integer)] -> PullM t (Event t Bool)
