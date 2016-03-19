@@ -75,6 +75,8 @@ afterTime (curTime, tbs) tgt = do
     -- Check that each step of the time is now greater then or equal to the time,
     -- switching promptly to the next step in the chain each time,
     -- and firing  when the time is >=.
+    -- All finer events fire when a corser event fires, so if we not are >= a more precise event, we'll
+    -- pass thought it on this step, and go directly to the next we're not >= to.
     allGreater :: [Event t Integer] -> m (Event t Bool)
     allGreater [] =
       -- Since TimeBits changed, the curTime component had to fire.
