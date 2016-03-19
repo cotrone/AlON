@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes #-}
 module ALON.Transforms (
-    runProcess, RunExternal(..)
+    parseGateTime
+  , runProcess, RunExternal(..)
   , utf8DecodeDirTree
   , cacheTemplates
   , render
@@ -13,6 +14,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
+import Data.Time
+import Data.Maybe
 import Text.Mustache
 import Text.Mustache.Types
 import Text.Mustache.Compile
@@ -22,6 +25,7 @@ import qualified Data.HashMap.Strict    as HM
 import qualified System.Process as P
 import System.Exit (ExitCode)
 import GHC.IO.Handle
+import Safe
 
 import System.IO.Unsafe
 
@@ -38,15 +42,35 @@ import ALON.Types
 --
 --   Examples of accepted ISO 8601 formats are:
 --     - 2016-03-18 (Taken to mean the earliest time on said day)
+--     - 2016-03-18T05:27:04 (Assumed to be Zulu)
 --     - 2016-03-18T05:27:04Z
 --     - 2016-03-18T05:27:04+00:00
---     - 2016-03-18T05:27:04+04:00
+--     - 2016-03-18T09:27:04+04:00
 --     - 2016-W11-5 (Meaning the Friday of the 11th week of 2016, specificly 2016-03-18)
+--     - 2016-W11-5T05:27:04
+--     - 2016-W11-5T05:27:04Z
+--     - 2016-W11-5T05:27:04+00:00
 --
 --   Once an entry has gone live, it should not stop being available.
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
 --timeGatedDir :: Reflex t => TimeBits t -> DynDirTree t a -> DynDirTree t a
+
+parseGateTime :: T.Text -> Maybe UTCTime
+parseGateTime t =
+    headMay . mapMaybe (\f -> parseTimeM False defaultTimeLocale f s) $ timeFormats
+  where
+    s = T.unpack t
+    timeFormats = weekFormats `mappend` dateFormats
+    dateFormats = map iso8601DateFormat $
+                  [ Just "%H:%M:%S%Z"
+                  , Just "%H:%M:%S%z"
+                  , Just "%H:%M:%S"
+                  , Nothing ]
+    weekFormats = [ "%Y-W%W-%wT%H:%M:%S%Z"
+                  , "%Y-W%W-%wT%H:%M:%S%z"
+                  , "%Y-W%W-%wT%H:%M:%S"
+                  , "%Y-W%W-%w" ]
 
 data RunExternal =
   RunExternal {
