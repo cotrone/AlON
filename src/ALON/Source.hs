@@ -1,26 +1,22 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, RecursiveDo #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module ALON.Source (
     TimeBits, utc2TimeBits, afterTime, atTime, time
   , DirTree, DynDirTree, DataUpdate(..)
   , dirSource
   ) where
 
-import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Fix
 import qualified Data.Map as Map
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import Data.ListTrie.Patricia.Map.Ord (TrieMap)
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import qualified System.FilePath as FP
-import qualified System.FSNotify as FSN
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.Conduit (($=), ($$))
 import qualified Data.Conduit.List as CL
 import Data.Conduit.Combinators (sourceDirectoryDeep)
-import qualified Control.Exception as E
 import Data.Functor.Misc
 import Reflex
 import Reflex.Host.Class
@@ -28,15 +24,14 @@ import Data.Dependent.Sum (DSum ((:=>)))
 import Control.Concurrent
 import Control.Concurrent.STM
 import Data.Time
-import System.Directory
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Functor.Identity
 import qualified GHC.Event as GHC
 import Data.Bits
 import Data.Time.Clock.POSIX
 
 import ALON.Types
+import ALON.Source.Internal
 
 -- | TimeBits is a list, each step containing the value of the time since the POSIX epoc,
 --   shifted right one more then the last.
@@ -142,28 +137,11 @@ type DirTree a = TrieMap Text a
 --   for more efficient updating.
 type DynDirTree t a = Dynamic t (DirTree (Dynamic t a))
 
-data DataUpdate =
-    DataMod ByteString
-  | DataDel
-  deriving (Eq, Ord, Show)
 
 dirSource :: (Reflex t, MonadALON t m)
           => FP.FilePath -> m (DynDirTree t ByteString)
 dirSource dir = do
-    eq <- askEQ
-    de <- newEventWithTrigger $ \et -> do
-      t <- forkIO . FSN.withManagerConf (FSN.defaultConfig {FSN.confUsePolling = False}) $ \m -> do
-        E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
-          wq <- newTQueueIO
-          -- Start listenin before we read the dir
-          void . FSN.watchTree m dir (const True) $ atomically . writeTQueue wq
-          -- Then we just watch the changes, and send them on
-          -- Having stripped off the leading path
-          pwd <- getCurrentDirectory
-          forever . E.handle (\(e::E.SomeException) -> putStrLn ("Excp: "++show e)) $ do
-            e <- atomically (readTQueue wq) >>= e2e pwd
-            atomically . writeTQueue eq $ et :=> (Identity e)
-      return (killThread t)
+    de <- watchDir dir
     let des = fanMap $ (uncurry Map.singleton) <$> de
         flEvent = select des . Const2 
         doDyn fl di = foldDyn (\e v ->
@@ -180,18 +158,7 @@ dirSource dir = do
     initDir <- foldM (flip doDirTree) mempty initS
     foldDynM doDirTree initDir de
   where
-    e2e :: FP.FilePath -> FSN.Event -> IO ([Text], DataUpdate)
-    e2e pf (FSN.Added fp _) = r pf fp
-    e2e pf (FSN.Modified fp _) = r pf fp
-    e2e pf (FSN.Removed fp _) =
-        return $ ( map T.pack . drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp
-                 , DataDel)
-    r :: FP.FilePath -> FP.FilePath -> IO ([Text], DataUpdate)
-    r pf fp = do
-      d <- liftIO . BS.readFile $ fp
-      d `deepseq` return ( map T.pack . drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp
-                         , DataMod d)
     readDb :: IO [([Text], DataUpdate)]
     readDb = do
       runResourceT $
-        sourceDirectoryDeep True dir $= CL.mapM (liftIO . r "") $$ CL.consume
+        sourceDirectoryDeep True dir $= CL.mapM (liftIO . readAsUpdate "") $$ CL.consume

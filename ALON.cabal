@@ -26,6 +26,7 @@ library
   exposed-modules:
           ALON.Types
         , ALON.Source
+        , ALON.Source.Internal
         , ALON.Transforms
         , ALON.Run
         , ALON.WebServer
