@@ -39,7 +39,7 @@ collapse d ti f = do
      (p'', t'') <- Map.toList . LT.children1 $ t'
      return (p'++[p''], t'')
 
-mapDynTreeWithKey :: (Reflex t, Functor (Dynamic t))
+mapDynTreeWithKey :: (Functor (Dynamic t))
                   => ([Text] -> a -> b) -> DynDirTree t a -> DynDirTree t b
 mapDynTreeWithKey f = fmap (LT.mapWithKey' (\p d -> f p <$> d))
 
@@ -47,16 +47,16 @@ mergeDynTree :: (Reflex t, MonadHold t m) => DynDirTree t a -> DynDirTree t a
              -> m (DynDirTree t a)
 mergeDynTree a b = mconcatDyn [a, b]
 
-apply2contents :: (Reflex t, Functor (Dynamic t))
+apply2contents :: (Functor (Dynamic t))
                => (a -> b) -> DynDirTree t a -> DynDirTree t b
 apply2contents f = fmap (fmap (fmap f))
 
-apply2contentsM ::  (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t))
+apply2contentsM :: (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t))
                => (forall m'. (MonadSample t m', MonadIO m') => Dynamic t a -> m' (Dynamic t b))
                -> DynDirTree t a -> m (DynDirTree t b)
 apply2contentsM trans = mapDynMIO (traverse trans)
 
-foldlDynDynList :: (Reflex t, Functor (Dynamic t), Applicative (Dynamic t))
+foldlDynDynList :: (Reflex t, Applicative (Dynamic t))
                 => (b -> a -> b) -> Dynamic t b -> Dynamic t [Dynamic t a] -> Dynamic t b
 foldlDynDynList f b0 dld = joinDyn $ (foldl (\b a -> f <$> b <*> a) b0) <$> dld
 
@@ -70,7 +70,7 @@ mapDynMIO f d = do
   return $ unsafeDynamic b' e'
 
 mapDynMHold :: forall t m a b
-             . (Reflex t, MonadHold t m, MonadHold t (PushM t), MonadHold t (PullM t), MonadFix (PushM t), MonadFix (PullM t))
+             . (Reflex t, MonadHold t m, MonadHold t (PullM t), MonadFix (PullM t))
             => (forall m'. (MonadSample t m', MonadHold t m', MonadFix m') => a -> m' b) -> Dynamic t a -> m (Dynamic t b)
 mapDynMHold f d = do
   let e' = push (liftM Just . f :: a -> PushM t (Maybe b)) $ updated d

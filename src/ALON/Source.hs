@@ -42,7 +42,7 @@ type TimeBits t = (Dynamic t UTCTime, [Dynamic t Integer])
 
 -- | Create a (lazy) list of Dynamics, each holding a the value of the UTCTime right-shifted as many bits
 --   as there are elements before it in the list.
-utc2TimeBits :: forall t. (Reflex t, Functor (Dynamic t)) => Dynamic t UTCTime -> TimeBits t
+utc2TimeBits :: forall t. (Functor (Dynamic t)) => Dynamic t UTCTime -> TimeBits t
 utc2TimeBits dt = (dt, [timeSlice b <$> dt | b <- [0..]])
 
 -- | Get the value of the UTCTime right-shifted the specified number of bits.
@@ -102,7 +102,7 @@ afterTime (curTime, tbs) tgt = do
 --   Fires instantly if the time is already past.
 --   
 --   Does not take into account leap seconds.
-atTime :: (Reflex t, MonadALON t m)
+atTime :: (MonadALON t m)
         => UTCTime -> m (Event t ())
 atTime theTime = do
   eq <- askEQ
@@ -116,7 +116,7 @@ atTime theTime = do
 -- | Provides a Dynamic UTCTime signal at the desired resolution.
 --   
 --   Slight drift in the form of more time then the request difference between timesteps is expected.
-time :: (Reflex t, MonadALON t m)
+time :: (MonadALON t m)
      => DiffTime -> m (Dynamic t UTCTime)
 time dt = do
   eq <- askEQ

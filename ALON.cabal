@@ -21,8 +21,8 @@ library
   -- other-extensions:    
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options: -Wall -O2 -rtsopts -with-rtsopts=-T
-  ghc-prof-options: -prof -auto-all -fprof-auto
+  ghc-options: -Wall -O2
+  ghc-prof-options: -auto-all -fprof-auto
   exposed-modules:
           ALON.Types
         , ALON.Source
@@ -32,7 +32,7 @@ library
         , ALON.WebServer
         , ALON.Manipulation
   build-depends:
-        base >=4.8 && <4.9
+        base >=4.8 && <4.10
       , deepseq
       , time >= 1.5
       , mtl
@@ -75,7 +75,7 @@ executable test
   ghc-prof-options: -prof -auto-all -fprof-auto
   main-is:             Main.hs
   build-depends:
-        base >=4.8 && <4.9
+        base >=4.8 && <4.10
       , ALON
       , stm
       , mtl

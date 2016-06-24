@@ -131,7 +131,7 @@ runProcess (RunExternal cmd args indata) = unsafePerformIO $ do
       --alonLogErrors . constDyn . pure $ "runProcess got Nothing for a handle."
       return undefined
 
-render :: (Reflex t, ToMustache k, Functor (Dynamic t), Applicative (Dynamic t))
+render :: (ToMustache k, Applicative (Dynamic t))
        => Text -> Dynamic t TemplateCache -> Dynamic t k
        -> Dynamic t Text
 render nm t v =
@@ -142,11 +142,11 @@ render nm t v =
        Nothing -> "Couldn't find template " `T.append` nm
        Just tmpl -> substitute tmpl $ actV
 
-utf8DecodeDirTree :: (Reflex t, Functor (Dynamic t))
+utf8DecodeDirTree :: (Functor (Dynamic t))
                   => DynDirTree t BS.ByteString -> DynDirTree t T.Text
 utf8DecodeDirTree = apply2contents TE.decodeUtf8
 
-cacheTemplates :: forall t m. (Reflex t, MonadALON t m, Functor (Dynamic t), Applicative (Dynamic t))
+cacheTemplates :: forall t m. (MonadALON t m, Applicative (Dynamic t))
                => DynDirTree t T.Text -> m (Dynamic t TemplateCache)
 cacheTemplates srcTree = do
     alonLogErrors errorResults

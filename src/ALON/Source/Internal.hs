@@ -32,7 +32,7 @@ readAsUpdate pf fp = do
   d `deepseq` return ( map T.pack . drop 1 . FP.splitDirectories . FP.makeRelative pf $ fp
                          , DataMod d)
 
-watchDir :: (Reflex t, MonadALON t m) => FilePath -> m (Event t ([Text], DataUpdate))
+watchDir :: (MonadALON t m) => FilePath -> m (Event t ([Text], DataUpdate))
 watchDir dir = do
     eq <- askEQ
     newEventWithTrigger $ \et -> do
