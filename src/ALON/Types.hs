@@ -24,6 +24,8 @@ instance MonadTrans (ALONT t ) where
 
 instance MonadHold t m => MonadHold t (ALONT t m) where
   hold a = lift . hold a
+  holdDyn a = lift . holdDyn a
+  holdIncremental a = lift . holdIncremental a
 
 instance MonadSample t m => MonadSample t (ALONT t m) where
   sample = lift . sample

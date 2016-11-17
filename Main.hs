@@ -34,7 +34,7 @@ assert False err = E.throwIO . E.AssertionFailed $ err
 
 main :: IO ()
 main = do
-    defaultMain tests
+    --defaultMain tests
     runWarp defaultSettings frm
   where
     frm :: AlONSite
@@ -50,7 +50,7 @@ main = do
       rt <- mergeDynTree pt dt
       return rt
 
-afterTimeSpec :: (Reflex t, MonadHold t m, MonadFix m, Functor (Dynamic t))
+afterTimeSpec :: (Reflex t, MonadHold t m, MonadFix m)
               => TimeBits t -> UTCTime -> m (Dynamic t Bool)
 afterTimeSpec (curTime, _) tgtTime = do
   n <- sample . current $ curTime

@@ -44,7 +44,7 @@ library
       , dependent-sum
       , dependent-map
       , reflex
-      , reflex-orphans >= 0.1.0.2
+--      , reflex-orphans >= 0.1.0.2
       , fsnotify
       , list-tries
       , filepath

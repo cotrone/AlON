@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes, KindSignatures #-}
 module ALON.Transforms (
     timeGatedDir, parseGateTime
   , runProcess, RunExternal(..)
@@ -7,6 +7,7 @@ module ALON.Transforms (
   , render
   ) where
 
+import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Fix
 import qualified System.FilePath as FP
@@ -55,20 +56,32 @@ import ALON.Types
 --   Once an entry has gone live, it should not stop being available.
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
+{-# WARNING timeGatedDir "timeGatedDir has not been migrated to modern Reflex!" #-}
 timeGatedDir :: forall t m a
-              . (Reflex t, MonadHold t m, Functor (Dynamic t), MonadHold t (PullM t), MonadFix (PullM t))
+             . (Reflex t, MonadHold t m, Functor (Dynamic t), MonadHold t (PullM t), MonadFix (PullM t))
              => TimeBits t -> DynDirTree t a -> m (DynDirTree t a)
 timeGatedDir tbs super = do
+    --LT.fromList <$> (filterByTime dynListTree)
     mapDynMHold (fmap LT.fromList . filterByTime) dynListTree
   where
+    mapDynMHold :: forall c d m'. (forall m'. (MonadSample t m', MonadHold t m', MonadFix m') => c -> m' d) -> Dynamic t c -> m (Dynamic t d)
+    mapDynMHold f d = do
+      let e' = push (liftM Just . f :: c -> PushM t (Maybe d)) $ updated d
+          eb' = fmap constant e'
+          v0 = pull $ f =<< sample (current d)
+      bb' :: Behavior t (Behavior t b) <- hold v0 eb'
+      let b' = pull $ sample =<< sample bb'
+      return $ unsafeDynamic b' e'
+
     dynListTree :: Dynamic t [([Text], Dynamic t a)]
     dynListTree = LT.toList <$> super
 
-    filterByTime :: (MonadSample t m', MonadHold t m', MonadFix m')
-                 => [([Text], Dynamic t a)] -> m' [([Text], Dynamic t a)]
+    filterByTime :: (MonadFix ms, MonadSample t ms, MonadHold t ms) => [([Text], Dynamic t a)]
+                 -> ms [([Text], Dynamic t a)]
     filterByTime = fmap catMaybes . mapM filterElem
-    filterElem :: (MonadSample t m', MonadHold t m', MonadFix m')
-               => ([Text], Dynamic t a) -> m' (Maybe ([Text], Dynamic t a))
+
+    filterElem :: (MonadFix ms, MonadSample t ms, MonadHold t ms)
+               => ([Text], Dynamic t a) -> ms (Maybe ([Text], Dynamic t a))
     filterElem el = do
       let mTime = headMay (fst el) >>= parseGateTime
       case mTime of
@@ -76,7 +89,7 @@ timeGatedDir tbs super = do
         Just tgtTime -> do
           tg <- afterTime tbs tgtTime
           isTime <- sample . current $ tg
-          return $ if isTime then Just el else Nothing 
+          return $ if isTime then Just el else Nothing
 
 parseGateTime :: T.Text -> Maybe UTCTime
 parseGateTime t =
@@ -142,11 +155,11 @@ render nm t v =
        Nothing -> "Couldn't find template " `T.append` nm
        Just tmpl -> substitute tmpl $ actV
 
-utf8DecodeDirTree :: (Functor (Dynamic t))
+utf8DecodeDirTree :: Functor (Dynamic t)
                   => DynDirTree t BS.ByteString -> DynDirTree t T.Text
 utf8DecodeDirTree = apply2contents TE.decodeUtf8
 
-cacheTemplates :: forall t m. (MonadALON t m, Applicative (Dynamic t))
+cacheTemplates :: forall t m. (MonadALON t m)
                => DynDirTree t T.Text -> m (Dynamic t TemplateCache)
 cacheTemplates srcTree = do
     alonLogErrors errorResults

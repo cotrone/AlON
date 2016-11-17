@@ -14,7 +14,6 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Reflex
 import Reflex.Host.Class
-import Reflex.Orphans ()
 import Data.Functor.Misc
 import Data.Functor.Identity
 import Data.Dependent.Map (DSum((:=>)))
