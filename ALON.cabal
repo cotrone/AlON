@@ -24,7 +24,8 @@ library
   ghc-options: -O2
   ghc-prof-options: -auto-all -fprof-auto
   exposed-modules:
-          ALON.Types
+          ALON
+        , ALON.Types
         , ALON.Source
         , ALON.Source.Internal
         , ALON.Transforms
