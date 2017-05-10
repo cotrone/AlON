@@ -10,9 +10,8 @@ import Data.Text ()
 import Data.Time
 import Data.Time.Clock.POSIX
 
-import Test.Framework
-import Test.Framework.Providers.HUnit
-import Test.HUnit.Base (Assertion, (@=?))
+import Test.Tasty
+import Test.Tasty.HUnit
 
 import Reflex.Host.Class
 import Data.Functor.Identity
@@ -41,14 +40,14 @@ afterTimeSpec (curTime, _) tgtTime = do
     False ->
       holdDyn False =<< (headE . ffilter (==True) . updated $ (((<) tgtTime) <$> curTime))
 
-tests :: [Test]
-tests =
+tests :: TestTree
+tests = testGroup "ALON Tests" $
     [ parseTimeGroup
     , testSelfTest
     , alonUpdateTests
     ]
 
-parseTimeGroup :: Test
+parseTimeGroup :: TestTree
 parseTimeGroup =
   testGroup "parseGateTime tests" $
     (map (\t -> testCase ("parse " ++ show t) (timeNonMidnight @=? parseGateTime t)) $
@@ -99,10 +98,10 @@ singleALON cases initVal frm = runSpiderHost $ do
 
 testALONCase :: (Eq b, Show b)
              => TestName -> (Event Spider a -> HostFrame Spider (Dynamic Spider b)) -> b -> [(Maybe a, Maybe b, b)]
-             -> Test
+             -> TestTree
 testALONCase tnm frm initVal cgen = testCase tnm . singleALON cgen initVal $ frm
 
-testSelfTest :: Test
+testSelfTest :: TestTree
 testSelfTest =
   testGroup "test self test" $
     [ testALONCase "test testALONCase empty" (const . return . constDyn $ 'a') 'a' []
@@ -115,7 +114,7 @@ testSelfTest =
         ]
     ]
 
-alonUpdateTests :: Test
+alonUpdateTests :: TestTree
 alonUpdateTests =
     testGroup "ALON update tests" $
       [ testALONCase "test utc2TimeBits" (\e -> do

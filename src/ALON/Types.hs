@@ -42,5 +42,5 @@ class (Monad m, MonadIO m, ReflexHost t, MonadFix m, MonadHold t m, MonadSample 
 
 instance (Monad m, MonadIO m, Reflex t, ReflexHost t, MonadFix m, MonadHold t m, MonadSample t m, MonadReflexCreateTrigger t m) => MonadALON t (ALONT t m) where
   alonLogErrors ne = do
-    get >>= (mconcatDyn . (:[ne])) >>= put
+    get >>= (return . mconcat . (:[ne])) >>= put
   askEQ = ALON ask
