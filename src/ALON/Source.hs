@@ -65,7 +65,7 @@ afterTime (curTime, tbs) tgt = do
       False -> do
         prefix <- dissimilarPrefix 0 [] tbs
         -- onceE to avoid reprocessing once True.
-        holdDyn False =<< onceE =<< (allGreater $ prefix)
+        holdDyn False =<< headE =<< (allGreater $ prefix)
   where
     -- Check that each step of the time is now greater then or equal to the time,
     -- switching promptly to the next step in the chain each time,

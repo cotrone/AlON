@@ -1,14 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes, KindSignatures #-}
 module ALON.Transforms (
     timeGatedDir, parseGateTime
-  , runProcess, RunExternal(..)
+--  , runProcess, RunExternal(..)
   , utf8DecodeDirTree
   , cacheTemplates
   , render
   ) where
 
 import Control.Monad
-import Control.Monad.Trans
+--import Control.Monad.Trans
 import Control.Monad.Fix
 import qualified System.FilePath as FP
 import qualified Data.ByteString as BS
@@ -18,18 +18,19 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Time
 import Data.Maybe
+--import Data.Monoid
 import Text.Mustache
 import Text.Mustache.Types
 import Text.Mustache.Compile
 import Text.Parsec.Error (ParseError, errorPos, messageString, errorMessages)
 import Data.Bifunctor
 import qualified Data.HashMap.Strict    as HM
-import qualified System.Process as P
-import System.Exit (ExitCode)
-import GHC.IO.Handle
+--import qualified System.Process as P
+--import System.Exit (ExitCode)
+--import GHC.IO.Handle
 import Safe
 
-import System.IO.Unsafe
+--import System.IO.Unsafe
 
 import Reflex
 import ALON.Source
@@ -64,7 +65,9 @@ timeGatedDir tbs super = do
     --LT.fromList <$> (filterByTime dynListTree)
     mapDynMHold (fmap LT.fromList . filterByTime) dynListTree
   where
-    mapDynMHold :: forall c d m'. (forall m'. (MonadSample t m', MonadHold t m', MonadFix m') => c -> m' d) -> Dynamic t c -> m (Dynamic t d)
+    mapDynMHold :: forall c d
+                . (forall m'. (MonadSample t m', MonadHold t m', MonadFix m') => c -> m' d)
+                -> Dynamic t c -> m (Dynamic t d)
     mapDynMHold f d = do
       let e' = push (liftM Just . f :: c -> PushM t (Maybe d)) $ updated d
           eb' = fmap constant e'
@@ -106,7 +109,7 @@ parseGateTime t =
                   , "%Y-W%W-%wT%H:%M:%S%z"
                   , "%Y-W%W-%wT%H:%M:%S"
                   , "%Y-W%W-%w" ]
-
+{-
 data RunExternal =
   RunExternal {
       reCmd :: FilePath
@@ -114,11 +117,13 @@ data RunExternal =
     , reStdIn :: BS.ByteString
     }
   deriving (Show, Eq)
-
+-}
 {- stderr is directed to errors.
  -}
-runProcess :: RunExternal -> (ExitCode, BS.ByteString)
-runProcess (RunExternal cmd args indata) = unsafePerformIO $ do
+{- runProcess :: (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t))
+           => Dynamic t RunExternal -> m (Dynamic t (ExitCode, BS.ByteString))
+--runProcess :: RunExternal -> (ExitCode, BS.ByteString)
+runProcess = (RunExternal cmd args indata) = do
   let cp = P.CreateProcess
         (P.RawCommand cmd args)
         Nothing Nothing
@@ -136,14 +141,14 @@ runProcess (RunExternal cmd args indata) = unsafePerformIO $ do
         serr_ <- BS.hGetContents cstderr
         hClose cstderr
         return (eCode_, sout_, serr_)
-      --unless (BS.null serr) $
-      --  alonLogErrors . constDyn $ ["runProcess got errors from "<>(T.pack cmd)<>":", T.pack . show $ serr]
+      unless (BS.null serr) $
+        alonLogErrors . constDyn $ ["runProcess got errors from "<>(T.pack cmd)<>":", T.pack . show $ serr]
       -- Its perfectly reasonable for warnings to print to stderr and still have success.
       return (exitCode, sout)
     _ -> do
-      --alonLogErrors . constDyn . pure $ "runProcess got Nothing for a handle."
+      alonLogErrors . constDyn . pure $ "runProcess got Nothing for a handle."
       return undefined
-
+-}
 render :: (ToMustache k, Applicative (Dynamic t))
        => Text -> Dynamic t TemplateCache -> Dynamic t k
        -> Dynamic t Text

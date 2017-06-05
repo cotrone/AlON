@@ -38,7 +38,7 @@ library
       , containers
       , unordered-containers
       , monad-loops
-      , dependent-sum
+      , dependent-sum == 0.4.*
       , dependent-map
       , reflex
       , fsnotify
@@ -70,7 +70,7 @@ executable mini-site
   ghc-options: -rtsopts -with-rtsopts=-T
   main-is:             Main.hs
   build-depends:
-        base >=4.8 && <4.10
+        base >=4.8 && <4.11
       , ALON
       , stm
       , mtl
@@ -93,7 +93,7 @@ test-suite test
   default-language:    Haskell2010
   ghc-options: -rtsopts -with-rtsopts=-T
   build-depends:
-        base >=4.8 && <4.10
+        base >=4.8 && <4.11
       , ALON
       , stm
       , mtl

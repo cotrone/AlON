@@ -11,7 +11,6 @@ import ALON.Source
 import ALON.Manipulation
 import ALON.Run
 import ALON.WebServer
-import ALON.Transforms
 
 assert :: Bool -> String -> IO ()
 assert True _ = return ()
@@ -30,7 +29,7 @@ main = do
       dt <- dirSource "test_dir"
       mt' <- dirSource "math_dir"
       let mt = (\tgb d -> if tgb then d else mempty) <$> tg <*> mt'
-      let pt = mapDynTreeWithKey (\_ ds -> snd . runProcess $ (RunExternal "dc" [] ds)) mt
+      let pt = mt -- mapDynTreeWithKey (\_ ds -> snd . runProcess $ (RunExternal "dc" [] ds)) mt
       return $ mergeDynTree pt dt
 
 
