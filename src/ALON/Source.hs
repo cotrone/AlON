@@ -19,6 +19,8 @@ import qualified Data.Conduit.List as CL
 import Data.Conduit.Combinators (sourceDirectoryDeep)
 import Data.Functor.Misc
 import Reflex
+import Reflex.Filesystem.DirTree
+import Reflex.Filesystem.Watch
 import Reflex.Host.Class
 import Data.Dependent.Sum (DSum ((:=>)))
 import Control.Concurrent
@@ -31,7 +33,6 @@ import Data.Bits
 import Data.Time.Clock.POSIX
 
 import ALON.Types
-import ALON.Source.Internal
 
 -- | TimeBits is a list, each step containing the value of the time since the POSIX epoc,
 --   shifted right one more then the last.
@@ -129,36 +130,3 @@ time dt = do
   now <- liftIO getCurrentTime
   holdDyn now e
 
-type DirTree a = TrieMap Text a
-
--- | Our basic ALON type for, representing at turns directories and site URL heirarchies.
---   In the future, we might make a special version of this type like 'Euhoria''s
---   <http://hackage.haskell.org/package/euphoria-0.6.0.1/docs/FRP-Euphoria-Collection.html Collection>
---   for more efficient updating.
-type DynDirTree t a = Dynamic t (DirTree (Dynamic t a))
-
-
-dirSource :: (Reflex t, MonadALON t m)
-          => FP.FilePath -> m (DynDirTree t ByteString)
-dirSource dir = do
-    de <- watchDir dir
-    let des = fanMap $ (uncurry Map.singleton) <$> de
-        flEvent = select des . Const2 
-        doDyn fl di = foldDyn (\e v ->
-                                  case e of
-                                    DataMod d -> d
-                                    _ -> v) di . flEvent $ fl
-        doDirTree c t =
-            case c of
-               (fp, DataDel) -> return . LT.delete fp $ t
-               (fp, DataMod _) | LT.member fp t -> return t -- It'll update its self.
-               (fp, DataMod d) | otherwise -> (\v -> LT.insert fp v t) <$> doDyn fp d
-    -- Place de has to be active by.
-    initS <- liftIO readDb
-    initDir <- foldM (flip doDirTree) mempty initS
-    foldDynM doDirTree initDir de
-  where
-    readDb :: IO [([Text], DataUpdate)]
-    readDb = do
-      runResourceT $
-        sourceDirectoryDeep True dir $= CL.mapM (liftIO . readAsUpdate "") $$ CL.consume
