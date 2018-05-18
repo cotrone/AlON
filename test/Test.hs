@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, FlexibleContexts, FlexibleContexts, RankNTypes #-}
 module Main where
 
 import Control.Monad
@@ -14,6 +14,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Reflex.Host.Class
+import Reflex.Test
 import Data.Functor.Identity
 import Data.Dependent.Map (DSum((:=>)))
 import Control.Monad.Ref
@@ -64,42 +65,18 @@ parseTimeGroup =
     timeNonMidnight = Just $ read "2016-03-18 05:27:04"
     timeMidnight = Just $ read "2016-03-18 00:00:00"
 
+testALONCase :: (Eq b, Show b)
+             => TestName
+             -> (forall t. (ReflexHost t) => Event t a -> HostFrame t (Dynamic t b))
+             -> b -> [(Maybe a, Maybe b, b)]
+             -> TestTree
+testALONCase tnm frm initVal cgen = testCase tnm $ eventTrace cgen initVal frm
+
 sameBehavior :: (Reflex t, Eq a, MonadSample t m, MonadIO m, Show a) => Behavior t a -> Behavior t a -> m ()
 sameBehavior ba bb = do
   va <- sample ba
   vb <- sample bb
   liftIO $ va @=? vb
-
-singleALON :: (Eq b, Show b)
-           => [(Maybe a, Maybe b, b)] -> b -> (Event Spider a -> HostFrame Spider (Dynamic Spider b))
-           -> Assertion
-singleALON cases initVal frm = runSpiderHost $ do
-  (re, rmt) <- newEventWithTriggerRef
-  rd <- runHostFrame . frm $ re
-
-  -- Make sure we initialized to the correct value
-  actualStart <- sample . current $ rd
-  liftIO $ initVal @=? actualStart
-
-  -- Now check every step of our event list to make sure we get the right results.
-  ehr <- subscribeEvent . updated $ rd
-  mrt <- readRef rmt
-  case mrt of
-    Nothing -> return () -- Event isn't used in the test
-    Just rt -> do
-      void . forM cases $ \(ma, mb, b) -> do
-        case ma of
-          Nothing -> return ()
-          Just a -> do
-            stepEventValue <- fireEventsAndRead [rt :=> (Identity a)] $ readEvent ehr >>= sequence
-            liftIO $ mb @=? stepEventValue
-        afterStepValue <- sample . current $ rd
-        liftIO $ b @=? afterStepValue
-
-testALONCase :: (Eq b, Show b)
-             => TestName -> (Event Spider a -> HostFrame Spider (Dynamic Spider b)) -> b -> [(Maybe a, Maybe b, b)]
-             -> TestTree
-testALONCase tnm frm initVal cgen = testCase tnm . singleALON cgen initVal $ frm
 
 testSelfTest :: TestTree
 testSelfTest =
