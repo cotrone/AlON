@@ -26,6 +26,8 @@ instance MonadHold t m => MonadHold t (ALONT t m) where
   hold a = lift . hold a
   holdDyn a = lift . holdDyn a
   holdIncremental a = lift . holdIncremental a
+  buildDynamic p = lift . buildDynamic p
+  headE = lift . headE
 
 instance MonadSample t m => MonadSample t (ALONT t m) where
   sample = lift . sample
@@ -33,6 +35,12 @@ instance MonadSample t m => MonadSample t (ALONT t m) where
 instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ALONT t m) where
   newEventWithTrigger f = lift $ newEventWithTrigger f
   newFanEventWithTrigger f = lift $ newFanEventWithTrigger f
+
+instance MonadReadEvent t m => MonadReadEvent t (ALONT t m) where
+  readEvent = fmap (fmap lift) . lift . readEvent
+
+instance MonadSubscribeEvent t m => MonadSubscribeEvent t (ALONT t m) where
+  subscribeEvent = lift . subscribeEvent
 
 type ALON a = forall t. Reflex t => ALONT t (HostFrame t) a
 

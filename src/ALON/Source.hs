@@ -84,7 +84,7 @@ afterTime (curTime, tbs) tgt = do
       -- We need what the event for the next step would be.
       nstep <- allGreater t
       -- whenever this step fires, we want to become that next step.
-      switchPromptly never . fmap (const nstep) $ cstep
+      switchHoldPromptly never . fmap (const nstep) $ cstep
 
     -- Find the prefix of time bits to a time >=
     dissimilarPrefix :: (Reflex t, MonadSample t m1)
