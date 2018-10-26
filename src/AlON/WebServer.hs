@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, FlexibleContexts, OverloadedStrings #-}
-module ALON.WebServer (
+module AlON.WebServer (
     runWarp
   ) where
 
@@ -24,8 +24,8 @@ import qualified Data.Text.Encoding as TE
 import Control.Concurrent
 import Network.Wai.Middleware.Cors
 
-import ALON.Source
-import ALON.Run
+import AlON.Source
+import AlON.Run
 
 data SiteStruct =
   SS { sContent :: DirTree ByteString

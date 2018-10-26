@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes, KindSignatures #-}
-module ALON.Transforms (
+module AlON.Transforms (
     timeGatedDir, parseGateTime
 --  , runProcess, RunExternal(..)
   , utf8DecodeDirTree
@@ -33,9 +33,9 @@ import Safe
 --import System.IO.Unsafe
 
 import Reflex
-import ALON.Source
-import ALON.Manipulation
-import ALON.Types
+import AlON.Source
+import AlON.Manipulation
+import AlON.Types
 
 -- | Take  TimeBits, and a DirTree. Assuming that the first path segment is a
 --   UTCTime, encoded as ISO 8601, results in a DynDirTree pressenting only
@@ -164,7 +164,7 @@ utf8DecodeDirTree :: Functor (Dynamic t)
                   => DynDirTree t BS.ByteString -> DynDirTree t T.Text
 utf8DecodeDirTree = apply2contents TE.decodeUtf8
 
-cacheTemplates :: forall t m. (MonadALON t m)
+cacheTemplates :: forall t m. (MonadAlON t m)
                => DynDirTree t T.Text -> m (Dynamic t TemplateCache)
 cacheTemplates srcTree = do
     alonLogErrors errorResults

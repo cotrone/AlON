@@ -1,5 +1,5 @@
 {-# LANGUAGE ExplicitForAll, FlexibleContexts, RankNTypes, ScopedTypeVariables, TupleSections #-}
-module ALON.Manipulation (
+module AlON.Manipulation (
     mapDynTreeWithKey
   , mergeDynTree
   , apply2contents
@@ -9,7 +9,7 @@ module ALON.Manipulation (
 import Control.Monad
 import Data.Text (Text)
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
-import ALON.Source
+import AlON.Source
 import Reflex
 
 -- This module is terrible code, nothing has been optimized.

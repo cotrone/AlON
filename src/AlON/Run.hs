@@ -1,14 +1,15 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
-module ALON.Run (
+module AlON.Run (
     SiteResult, AlONSite, UpdateSite, SetupSite
   , runSite
   ) where
 
+import Control.Concurrent.EQueue
 import Control.Monad.Trans
 import Control.Monad.Reader
 import Control.Monad.State
-import ALON.Types
-import ALON.Source
+import AlON.Types
+import AlON.Source
 import Data.Time
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -18,7 +19,6 @@ import Data.Functor.Misc
 import Data.Functor.Identity
 import Data.Dependent.Map (DSum((:=>)))
 import qualified Data.Dependent.Map as DMap
-import Control.Concurrent.STM
 import Data.ByteString (ByteString)
 import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
@@ -29,7 +29,7 @@ type SiteResult t = DynDirTree t ByteString
 
 type AlONSite =
   forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t), MonadIO (PushM t), MonadIO (PullM t)) =>
-  ALONT t (HostFrame t) (SiteResult t)
+  AlONT t (HostFrame t) (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
 
@@ -41,10 +41,10 @@ runSite :: HandleErrors -> SetupSite -> UpdateSite -> AlONSite -> IO ()
 runSite herr setup up frm = runSpiderHost $ do
   startTime' <- liftIO getCurrentTime
 
-  eq <- liftIO newTQueueIO
-  (o, errD) <- runHostFrame . (`runStateT` (constDyn [])) . (`runReaderT` eq) . unALON $ frm
+  eq <- newSTMEQueue
+  (o, errD) <- runHostFrame . (`runStateT` (constDyn [])) . (`runReaderT` eq) . unAlON $ frm
 
-  pre <- liftIO . atomically . whileM (not <$> isEmptyTQueue eq) $ readTQueue eq
+  pre <- waitEQ eq ReturnImmediate
   fireEvents pre
   fstate <- (sample . current $ o) >>= mapM (sample . current)
   liftIO . setup $ fstate
@@ -71,12 +71,12 @@ runSite herr setup up frm = runSpiderHost $ do
   (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
 
     -- Read the new events
-    e <- liftIO . atomically $ readTQueue eq
+    es <- waitEQ eq RequireEvent
 
     startTime <- liftIO getCurrentTime
 
     pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
-    ec::[([Text], Maybe ByteString)] <- fireEventsAndRead [e] $ do
+    ec::[([Text], Maybe ByteString)] <- fireEventsAndRead es $ do
       mchange <- readEvent pageChangeHandle
       changes <- maybe (return mempty) id mchange
       return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes

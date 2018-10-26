@@ -8,11 +8,11 @@ import Data.Text ()
 import Data.Time
 import Network.Wai.Handler.Warp (defaultSettings)
 
-import ALON.Types
-import ALON.Source
-import ALON.Manipulation
-import ALON.Run
-import ALON.WebServer
+import AlON.Types
+import AlON.Source
+import AlON.Manipulation
+import AlON.Run
+import AlON.WebServer
 
 assert :: Bool -> String -> IO ()
 assert True _ = return ()
@@ -24,16 +24,14 @@ main = do
   where
     frm :: AlONSite
     frm = do
-      -- This is a temporary fix while reflex-inotify is being split out.
       eq <- askEQ
-      let q = atomically . mapM_ (writeTQueue eq)
 
-      et <- time 1
+      et <- time eq 1
       let tbs = utc2TimeBits et
       now <- liftIO $ getCurrentTime
       tg <- afterTime tbs (5 `addUTCTime` now)
-      dt <- dirSource q "test_dir"
-      mt' <- dirSource q "math_dir"
+      dt <- dirSource eq "test_dir"
+      mt' <- dirSource eq "math_dir"
       let mt = (\tgb d -> if tgb then d else mempty) <$> tg <*> mt'
       let pt = mt -- mapDynTreeWithKey (\_ ds -> snd . runProcess $ (RunExternal "dc" [] ds)) mt
       return $ mergeDynTree pt dt
