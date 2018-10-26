@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, FlexibleContexts, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 module Main (main) where
 
 import Data.Text ()
