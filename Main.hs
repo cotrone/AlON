@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, FlexibleContexts, RankNTypes #-}
 module Main where
 
-import Control.Concurrent.STM (atomically, writeTQueue)
 import Control.Monad.Trans
 import qualified Control.Exception as E
 import Data.Text ()

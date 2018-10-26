@@ -7,7 +7,6 @@ import Data.Text (Text)
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Concurrent.EQueue
-import Control.Concurrent.STM
 import Data.Dependent.Sum (DSum)
 import Data.Functor.Identity
 import Reflex

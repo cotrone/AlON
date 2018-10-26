@@ -1,45 +1,20 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, FlexibleContexts, FlexibleContexts, RankNTypes #-}
-module Main where
+module Main (main) where
 
-import Control.Monad
-import Control.Monad.Fix
-import Control.Monad.Trans
-import qualified Control.Exception as E
-import Data.Bits
 import Data.Text ()
-import Data.Time
-import Data.Time.Clock.POSIX
 
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Reflex.Host.Class
 import Reflex.Test
-import Data.Functor.Identity
-import Data.Dependent.Map (DSum((:=>)))
-import Control.Monad.Ref
 
-import AlON.Source
 import AlON.Transforms
 
 import Reflex
 
-assert :: Bool -> String -> IO ()
-assert True _ = return ()
-assert False err = E.throwIO . E.AssertionFailed $ err
-
 main :: IO ()
-main = do
-    defaultMain tests
-
-afterTimeSpec :: (Reflex t, MonadHold t m, MonadFix m)
-              => TimeBits t -> UTCTime -> m (Dynamic t Bool)
-afterTimeSpec (curTime, _) tgtTime = do
-  n <- sample . current $ curTime
-  case tgtTime <= n of
-    True -> return . constDyn $ True
-    False ->
-      holdDyn False =<< (headE . ffilter (==True) . updated $ (((<) tgtTime) <$> curTime))
+main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "AlON Tests" $
@@ -71,12 +46,6 @@ testAlONCase :: (Eq b, Show b)
              -> b -> [(Maybe a, Maybe b, b)]
              -> TestTree
 testAlONCase tnm frm initVal cgen = testCase tnm $ eventTrace cgen initVal frm
-
-sameBehavior :: (Reflex t, Eq a, MonadSample t m, MonadIO m, Show a) => Behavior t a -> Behavior t a -> m ()
-sameBehavior ba bb = do
-  va <- sample ba
-  vb <- sample bb
-  liftIO $ va @=? vb
 
 testSelfTest :: TestTree
 testSelfTest =

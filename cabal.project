@@ -1,21 +1,24 @@
 packages: .
           ../reflex
-	  ../reflex-test
-	  ../reflex-files
- 	  ../reflex-time
-	  ../equeue
-	  ../dimensional
-	  ../list-trie
-	  ../monoidal-containers
-	  ../hfsnotify
-	  ../polyparse
+          ../reflex-test
+          ../reflex-files
+          ../reflex-time
+          ../equeue
+          ../dimensional
+          ../list-trie
+          ../monoidal-containers
+          ../hfsnotify
+          ../polyparse
 
 allow-newer: haskell-src-meta:base
              haskell-src-meta:template-haskell
-	     ref-tf:stm
-	     list-tries:base
-	     list-tries:containers
-	     polyparse:base
+             ref-tf:stm
+             list-tries:base
+             list-tries:containers
+             polyparse:base
+
+package AlON
+  ghc-options: -Wall -Werror
 
 package dimensional
   coverage: False
