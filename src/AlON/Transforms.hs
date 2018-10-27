@@ -102,13 +102,12 @@ parseGateTime t =
     timeFormats = weekFormats `mappend` dateFormats
     dateFormats = map iso8601DateFormat $
                   [ Just "%H:%M:%S%Z"
-                  , Just "%H:%M:%S%z"
-                  , Just "%H:%M:%S"
-                  , Nothing ]
+                  ]
     weekFormats = [ "%Y-W%W-%wT%H:%M:%S%Z"
-                  , "%Y-W%W-%wT%H:%M:%S%z"
-                  , "%Y-W%W-%wT%H:%M:%S"
-                  , "%Y-W%W-%w" ]
+                  , "%Y-%m-%d%Z"
+                  , "%Y-W%W-%w%Z"
+                  , "%Y-W%W-%w"
+                  ]
 {-
 data RunExternal =
   RunExternal {
