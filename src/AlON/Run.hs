@@ -47,11 +47,11 @@ runSite herr setup up frm = runSpiderHost $ do
   pre <- waitEQ eq ReturnImmediate
   fireEvents pre
   fstate <- (sample . current $ o) >>= mapM (sample . current)
-  liftIO . setup $ fstate
   errs' <- sample . current $ errD
+  liftIO . herr $ errs'
+  liftIO . setup $ fstate
   finishedTime' <- liftIO getCurrentTime
   liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
-  liftIO . herr $ errs'
 
   {- Ok, this gets a bit complicated.
    -
@@ -100,7 +100,7 @@ runSite herr setup up frm = runSpiderHost $ do
     liftIO . herr $ errs
     liftIO . up $ ec++added++removed
 
-    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ v]) added)
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (T.pack . show $ v)]) added)
     liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ (v::Maybe ByteString)]) removed)
     liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ v]) ec)
 

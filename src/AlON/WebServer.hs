@@ -36,6 +36,7 @@ runWarp :: Warp.Settings -> AlONSite -> IO ()
 runWarp settings site = do
   siteState <- newTVarIO (SS mempty mempty)
   let startSite is = do
+        print is
         cm <- mapM (const newTChanIO) is
         atomically . writeTVar siteState $ SS is cm
         -- fire off warp
@@ -53,7 +54,9 @@ runWarp settings site = do
               Just (d, _) | ("GET" == WAI.requestMethod r) ->
                 mk . WAI.responseBuilder HTTP.status200 [] . fromByteString $ d
               _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
-  let upSite ups = atomically $ do
+  let upSite ups = do
+       print ups
+       atomically $ do
         i' <- readTVar siteState
         inxt <- (\a -> foldM a i' ups) $ \ i (fp, md) -> do
            case md of
