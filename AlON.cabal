@@ -43,8 +43,6 @@ library
       , fsnotify
       , list-tries
       , filepath
-      , conduit
-      , conduit-combinators
       , resourcet
       , time
       , directory
@@ -109,5 +107,5 @@ test-suite test
       , monad-loops
       , warp
       , text
-      , tasty ^>= 1.1
+      , tasty ^>= 1.2
       , tasty-hunit ^>= 0.10

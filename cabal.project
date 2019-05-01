@@ -1,12 +1,12 @@
 packages: .
-          ../reflex
-          ../reflex-test
+--          ../reflex
+--          ../reflex-test
           ../reflex-files
           ../reflex-time
-          ../equeue
+--          ../equeue
           ../dimensional
           ../list-trie
-          ../monoidal-containers
+--          ../monoidal-containers
           ../hfsnotify
           ../polyparse
 
