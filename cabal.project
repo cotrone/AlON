@@ -1,14 +1,13 @@
 packages: .
 --          ../reflex
---          ../reflex-test
+          ../reflex-test
           ../reflex-files
           ../reflex-time
 --          ../equeue
-          ../dimensional
           ../list-trie
 --          ../monoidal-containers
-          ../hfsnotify
-          ../polyparse
+--          ../hfsnotify
+--          ../polyparse
 
 allow-newer: haskell-src-meta:base
              haskell-src-meta:template-haskell
@@ -20,23 +19,7 @@ allow-newer: haskell-src-meta:base
 package AlON
   ghc-options: -Wall -Werror
 
-package dimensional
-  coverage: False
-  library-coverage: False
-
-package polyparse
-  coverage: False
-  library-coverage: False
-
-package fsnotify
-  coverage: False
-  library-coverage: False
-
 package list-tries
-  coverage: False
-  library-coverage: False
-
-package monoidal-containers
   coverage: False
   library-coverage: False
 
@@ -49,13 +32,5 @@ package reflex-files
   library-coverage: False
 
 package reflex-time
-  coverage: False
-  library-coverage: False
-
-package reflex
-  coverage: False
-  library-coverage: False
-
-package equeue
   coverage: False
   library-coverage: False
