@@ -17,7 +17,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Time
-import Data.Maybe
+import Data.Maybe (catMaybes)
 --import Data.Monoid
 import Text.Mustache
 import Text.Mustache.Types

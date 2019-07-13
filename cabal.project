@@ -15,6 +15,7 @@ allow-newer: haskell-src-meta:base
              list-tries:base
              list-tries:containers
              polyparse:base
+	     reflex
 
 package AlON
   ghc-options: -Wall -Werror
