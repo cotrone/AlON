@@ -48,7 +48,7 @@ import AlON.Types
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
 timeGatedDir :: forall t m a
-             . (Reflex t, MonadHold t m)
+             . (Reflex t, Applicative m)
              => TimeBits t -> DynDirTree t a -> m (DynDirTree t a)
 timeGatedDir (dynTime, _) super = do
     -- See git history for a more efficient version
