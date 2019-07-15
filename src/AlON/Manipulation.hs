@@ -2,7 +2,7 @@
 module AlON.Manipulation (
     mapDynTreeWithKey
   , mergeDynTree
-  , apply2contents
+  , apply2DynDirTree
   , foldlDynDynList
   ) where
 
@@ -23,11 +23,10 @@ mergeDynTree :: Reflex t => DynDirTree t a -> DynDirTree t a
              -> DynDirTree t a
 mergeDynTree a b = mconcat $ [a, b]
 
-apply2contents :: (Functor (Dynamic t))
-               => (a -> b) -> DynDirTree t a -> DynDirTree t b
-apply2contents f = fmap (fmap (fmap f))
-
 foldlDynDynList :: (Reflex t)
                 => (b -> a -> b) -> Dynamic t b -> Dynamic t [Dynamic t a] -> Dynamic t b
 foldlDynDynList f b0 dld = join $ (foldl (\b a -> f <$> b <*> a) b0) <$> dld
 
+apply2DynDirTree :: (Functor (Dynamic t))
+                 => (a -> b) -> DynDirTree t a -> DynDirTree t b
+apply2DynDirTree f = fmap (fmap (fmap f))

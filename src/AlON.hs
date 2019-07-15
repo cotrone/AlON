@@ -3,11 +3,11 @@ module AlON (
  , module AlON.Manipulation
  , module AlON.Run
  , module AlON.WebServer
- , module AlON.Transforms
+ , module AlON.Transform
  ) where
 
 import AlON.Source
 import AlON.Manipulation
 import AlON.Run
 import AlON.WebServer
-import AlON.Transforms
+import AlON.Transform

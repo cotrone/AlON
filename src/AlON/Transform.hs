@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes, KindSignatures #-}
-module AlON.Transforms (
+module AlON.Transform (
     timeGatedDir, parseGateTime
 --  , runProcess, RunExternal(..)
   , utf8DecodeDirTree
@@ -161,7 +161,7 @@ render nm t v =
 
 utf8DecodeDirTree :: Functor (Dynamic t)
                   => DynDirTree t BS.ByteString -> DynDirTree t T.Text
-utf8DecodeDirTree = apply2contents TE.decodeUtf8
+utf8DecodeDirTree = apply2DynDirTree TE.decodeUtf8
 
 cacheTemplates :: forall t m. (MonadAlON t m)
                => DynDirTree t T.Text -> m (Dynamic t TemplateCache)
