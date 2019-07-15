@@ -42,12 +42,13 @@ common deps
       , skein
       , stm
       , text
-      , time >= 1.5
+      , time >= 1.9
       , unordered-containers
       , wai
       , wai-extra
       , wai-cors
       , warp
+      , witherable
 
 library
   import: deps

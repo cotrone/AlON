@@ -1,36 +1,26 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, FlexibleContexts, RankNTypes, KindSignatures #-}
 module AlON.Transform (
     timeGatedDir, parseGateTime
---  , runProcess, RunExternal(..)
   , utf8DecodeDirTree
   , cacheTemplates
   , render
   ) where
 
-import Control.Monad
---import Control.Monad.Trans
-import Control.Monad.Fix
 import qualified System.FilePath as FP
 import qualified Data.ByteString as BS
-import Data.Text (Text)
+import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
-import Data.Time
-import Data.Maybe (catMaybes)
---import Data.Monoid
-import Text.Mustache
-import Text.Mustache.Types
-import Text.Mustache.Compile
-import Text.Parsec.Error (ParseError, errorPos, messageString, errorMessages)
-import Data.Bifunctor
+import           Data.Time
+import           Data.Witherable
+import           Text.Mustache
+import           Text.Mustache.Types
+import           Text.Mustache.Compile
+import           Text.Parsec.Error (ParseError, errorPos, messageString, errorMessages)
+import           Data.Bifunctor
 import qualified Data.HashMap.Strict    as HM
---import qualified System.Process as P
---import System.Exit (ExitCode)
---import GHC.IO.Handle
 import Safe
-
---import System.IO.Unsafe
 
 import Reflex
 import AlON.Source
@@ -57,42 +47,18 @@ import AlON.Types
 --   Once an entry has gone live, it should not stop being available.
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
-{-# WARNING timeGatedDir "timeGatedDir has not been migrated to modern Reflex!" #-}
 timeGatedDir :: forall t m a
-             . (Reflex t, MonadHold t m, Functor (Dynamic t), MonadHold t (PullM t), MonadFix (PullM t))
+             . (Reflex t, MonadHold t m)
              => TimeBits t -> DynDirTree t a -> m (DynDirTree t a)
-timeGatedDir tbs super = do
-    --LT.fromList <$> (filterByTime dynListTree)
-    mapDynMHold (fmap LT.fromList . filterByTime) dynListTree
+timeGatedDir (dynTime, _) super = do
+    -- See git history for a more efficient version
+    pure $ filterTimes <$> dynTime <*> super
   where
-    mapDynMHold :: forall c d
-                . (forall m'. (MonadSample t m', MonadHold t m', MonadFix m') => c -> m' d)
-                -> Dynamic t c -> m (Dynamic t d)
-    mapDynMHold f d = do
-      let e' = push (liftM Just . f :: c -> PushM t (Maybe d)) $ updated d
-          eb' = fmap constant e'
-          v0 = pull $ f =<< sample (current d)
-      bb' :: Behavior t (Behavior t b) <- hold v0 eb'
-      let b' = pull $ sample =<< sample bb'
-      return $ unsafeDynamic b' e'
-
-    dynListTree :: Dynamic t [([Text], Dynamic t a)]
-    dynListTree = LT.toList <$> super
-
-    filterByTime :: (MonadFix ms, MonadSample t ms, MonadHold t ms) => [([Text], Dynamic t a)]
-                 -> ms [([Text], Dynamic t a)]
-    filterByTime = fmap catMaybes . mapM filterElem
-
-    filterElem :: (MonadFix ms, MonadSample t ms, MonadHold t ms)
-               => ([Text], Dynamic t a) -> ms (Maybe ([Text], Dynamic t a))
-    filterElem el = do
-      let mTime = headMay (fst el) >>= parseGateTime
-      case mTime of
-        Nothing -> return Nothing
-        Just tgtTime -> do
-          tg <- afterTime tbs tgtTime
-          isTime <- sample . current $ tg
-          return $ if isTime then Just el else Nothing
+   filterTimes :: UTCTime -> DirTree (Dynamic t a) -> DirTree (Dynamic t a)
+   filterTimes t = LT.mapMaybeWithKey $ \el dc ->
+                     case headMay el >>= parseGateTime of
+                       Just tgtTime | t >= tgtTime -> Just dc
+                       _ -> Nothing
 
 parseGateTime :: T.Text -> Maybe UTCTime
 parseGateTime t =
@@ -108,46 +74,7 @@ parseGateTime t =
                   , "%Y-W%W-%w%Z"
                   , "%Y-W%W-%w"
                   ]
-{-
-data RunExternal =
-  RunExternal {
-      reCmd :: FilePath
-    , reArgs :: [String]
-    , reStdIn :: BS.ByteString
-    }
-  deriving (Show, Eq)
--}
-{- stderr is directed to errors.
- -}
-{- runProcess :: (Reflex t, MonadHold t m, MonadIO (PushM t), MonadIO (PullM t))
-           => Dynamic t RunExternal -> m (Dynamic t (ExitCode, BS.ByteString))
---runProcess :: RunExternal -> (ExitCode, BS.ByteString)
-runProcess = (RunExternal cmd args indata) = do
-  let cp = P.CreateProcess
-        (P.RawCommand cmd args)
-        Nothing Nothing
-        P.CreatePipe P.CreatePipe P.CreatePipe True
-        True False False False True Nothing Nothing
-  (mcstdin, mcstdout, mcstderr, ph) <- liftIO . P.createProcess $ cp
-  case (mcstdin, mcstdout, mcstderr) of
-    (Just cstdin, Just cstdout, Just cstderr) -> do
-      (exitCode, sout, serr) <- liftIO $ do
-        BS.hPut cstdin indata
-        hClose cstdin -- We're done sending the input, which we have to do before the process can exit.
-        eCode_ <- P.waitForProcess ph
-        sout_ <- BS.hGetContents cstdout
-        hClose cstdout
-        serr_ <- BS.hGetContents cstderr
-        hClose cstderr
-        return (eCode_, sout_, serr_)
-      unless (BS.null serr) $
-        alonLogErrors . constDyn $ ["runProcess got errors from "<>(T.pack cmd)<>":", T.pack . show $ serr]
-      -- Its perfectly reasonable for warnings to print to stderr and still have success.
-      return (exitCode, sout)
-    _ -> do
-      alonLogErrors . constDyn . pure $ "runProcess got Nothing for a handle."
-      return undefined
--}
+
 render :: (ToMustache k, Applicative (Dynamic t))
        => Text -> Dynamic t TemplateCache -> Dynamic t k
        -> Dynamic t Text

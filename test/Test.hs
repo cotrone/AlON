@@ -7,12 +7,14 @@ import           AlON.Manipulation
 import           AlON.Source
 import           AlON.Transform
 import           Control.Monad
---import           Control.Monad.Fix
+import           Data.Bifunctor
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import qualified Data.Map as Map
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
---import           Data.Time
---import           Data.Time.Clock.POSIX
+import           Data.Time
+import           Data.Time.Clock.POSIX
+import           Data.Time.Format.ISO8601
 import           Reflex
 import           Reflex.Filesystem.Internal
 import           Reflex.Host.Class
@@ -28,7 +30,7 @@ tests = testGroup "AlON Tests" $
     [ parseTimeGroup
     , testSelfTest
     , manipulationTests
---    , transformTests
+    , transformTests
     ]
 
 parseTimeGroup :: TestTree
@@ -165,21 +167,35 @@ manipulationTests =
         , (Just $ Map.singleton ["init"] PathDel, Just $ LT.fromList [(["test"], ["1", "test"])], LT.fromList [(["test"], ["1", "test"])])
         ]
     ]
-{-
+
 transformTests :: TestTree
 transformTests =
   testGroup "Transform Tests" $
     [ let startTime = posixSecondsToUTCTime 1000
-          initialDir = mempty
+          asTree = LT.fromList . fmap (fmap newData)
+          asTimePath = map (T.pack . iso8601Show)
+          asMod = DataMod . TE.encodeUtf8
+          toUpdate = map (bimap asTimePath asMod)
+          laterUp = toUpdate [([1500   `addUTCTime` startTime], "afterer")]
+          initialDir = toUpdate
+            [ ([(-1000) `addUTCTime` startTime], "past")
+            , ([                     startTime], "at")
+            , ([ 1000   `addUTCTime` startTime], "after")
+            ]
       in
       testAlONCase "timeGatedDir"
       (\e -> do
         let (timeE, dirE) = fanEither e
-	timeBitsDyn <- utc2TimeBits <$> holdDyn startTime timeE
-	dirDyn <- followDir initialDir dirE
+        timeBitsDyn <- utc2TimeBits <$> holdDyn startTime timeE
+        dirDyn <- followDir initialDir dirE
         sampleDirTree <$> timeGatedDir timeBitsDyn dirDyn)
-      mempty
-      [
+      (asTree . take 2 $ initialDir)
+      [ (Just (Left $  500 `addUTCTime` startTime), Just (asTree . take 2 $ initialDir), (asTree . take 2 $ initialDir))
+      , (Just (Left $ 1000 `addUTCTime` startTime), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
+        -- This should really be 3 showing it doesn't roll back.
+      , (Just (Left $  999 `addUTCTime` startTime), Just (asTree . take 2 $ initialDir), (asTree . take 2 $ initialDir))
+      , (Just (Left $ 1000 `addUTCTime` startTime), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
+      , (Just (Right $ Map.fromList $ laterUp), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
+      , (Just (Left $ 1600 `addUTCTime` startTime), Just (asTree $ initialDir <> laterUp), (asTree $ initialDir <> laterUp))
       ]
     ]
--}
