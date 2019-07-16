@@ -83,6 +83,7 @@ parseTimeGroup =
         ]
     ]
   where
+    timeLateDay, timeNonMidnight, timeMidnight :: Maybe UTCTime
     timeLateDay = Just $ read "2016-03-18 18:27:04"
     timeNonMidnight = Just $ read "2016-03-18 05:27:04"
     timeMidnight = Just $ read "2016-03-18 00:00:00"

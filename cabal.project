@@ -1,20 +1,14 @@
 packages: .
---          ../reflex
           ../reflex-test
           ../reflex-files
           ../reflex-time
---          ../equeue
           ../list-trie
---          ../monoidal-containers
---          ../hfsnotify
---          ../polyparse
 
 allow-newer: haskell-src-meta:base
              haskell-src-meta:template-haskell
              ref-tf:stm
              list-tries:base
              list-tries:containers
-             polyparse:base
 	     reflex
 	     reflex:time
 	     reflex-time:tasty
