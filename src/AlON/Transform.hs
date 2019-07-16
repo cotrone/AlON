@@ -65,15 +65,16 @@ parseGateTime t =
     headMay . mapMaybe (\f -> parseTimeM False defaultTimeLocale f s) $ timeFormats
   where
     s = T.unpack t
-    timeFormats = weekFormats `mappend` dateFormats
+    timeFormats = (<>) <$> (weekFormats `mappend` dateFormats) <*> zoneFormats
     dateFormats = map iso8601DateFormat $
-                  [ Just "%H:%M:%S%Z"
+                  [ Just "%H:%M:%S"
                   ]
-    weekFormats = [ "%Y-W%W-%wT%H:%M:%S%Z"
-                  , "%Y-%m-%d%Z"
-                  , "%Y-W%W-%w%Z"
+    weekFormats = [ "%Y-W%W-%wT%H:%M:%S"
+                  , "%Y-%m-%d"
+                  , "%Y-W%W-%w"
                   , "%Y-W%W-%w"
                   ]
+    zoneFormats = [ "%Z", "%EZ", "" ]
 
 render :: (ToMustache k, Applicative (Dynamic t))
        => Text -> Dynamic t TemplateCache -> Dynamic t k
