@@ -6,7 +6,10 @@ module AlON.Transform (
   , render
   ) where
 
-import qualified System.FilePath as FP
+import           AlON.Manipulation
+import           AlON.Source
+import           AlON.Types
+import           Control.Monad.Fix
 import qualified Data.ByteString as BS
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -20,12 +23,9 @@ import           Text.Mustache.Compile
 import           Text.Parsec.Error (ParseError, errorPos, messageString, errorMessages)
 import           Data.Bifunctor
 import qualified Data.HashMap.Strict    as HM
-import Safe
-
-import Reflex
-import AlON.Source
-import AlON.Manipulation
-import AlON.Types
+import           Reflex
+import           Safe
+import qualified System.FilePath as FP
 
 -- | Take  TimeBits, and a DirTree. Assuming that the first path segment is a
 --   UTCTime, encoded as ISO 8601, results in a DynDirTree pressenting only
@@ -48,7 +48,7 @@ import AlON.Types
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
 timeGatedDir :: forall t m a
-             . (Reflex t, Applicative m)
+             . (Reflex t, MonadHold t m, MonadFix m)
              => TimeBits t -> DynDirTree t a -> m (DynDirTree t a)
 timeGatedDir (dynTime, _) super = do
     -- See git history for a more efficient version

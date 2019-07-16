@@ -198,4 +198,15 @@ transformTests =
       , (Just (Right $ Map.fromList $ laterUp), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
       , (Just (Left $ 1600 `addUTCTime` startTime), Just (asTree $ initialDir <> laterUp), (asTree $ initialDir <> laterUp))
       ]
+    , let mapUtf8 = fmap (fmap (DataMod . TE.encodeUtf8))
+          initialDir = [([""], "")]
+          extraGood  =  [(["new"], "test")]
+      in
+      testAlONCase "Decode UTF8 Tree"
+      (\e ->  do
+        d <- followDir (mapUtf8 initialDir) e
+        pure $ sampleDirTree $ utf8DecodeDirTree d)
+      (LT.fromList initialDir)
+      [ (Just $ Map.fromList $ mapUtf8 extraGood, Just (LT.fromList $ initialDir <> extraGood), (LT.fromList $ initialDir <> extraGood))
+      ]
     ]
