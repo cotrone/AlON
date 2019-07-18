@@ -9,7 +9,6 @@ import           AlON.Transform
 import           Control.Monad
 import           Data.Bifunctor
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
-import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Data.Time
@@ -116,9 +115,9 @@ manipulationTests :: TestTree
 manipulationTests =
   testGroup "Manipulation Tests" $
     let aTree        = LT.fromList [(["a", "b"], ())]::DirTree ()
-        testEntry    = (["Test"], mempty)
+        testEntry    = (["Test"], mempty::())
         testTree     = LT.fromList [testEntry]
-        anotherEntry = (["Another"], mempty)
+        anotherEntry = (["Another"], mempty::())
         anotherTree  = LT.fromList [anotherEntry]
     in
     [ testAlONCase "merge mempty doesn't change a/b."
@@ -132,10 +131,10 @@ manipulationTests =
     , testAlONCase "merge nempty updates."
         (\e -> sampleDirTree <$> (mergeDynTree (constDynDirTree mempty) <$> (followDir [] e)))
         mempty
-        [ (Just $ uncurry Map.singleton (fmap DataMod testEntry), Just testTree, testTree)
+        [ (Just $ [fmap DataMod testEntry], Just testTree, testTree)
         , (Nothing, Nothing, testTree)
-        , (Just $ uncurry Map.singleton (fmap DataMod anotherEntry), Just (testTree<>anotherTree), testTree<>anotherTree)
-        , (Just $ Map.singleton (fst anotherEntry) PathDel, Just testTree, testTree)
+        , (Just $ [fmap DataMod anotherEntry], Just (testTree<>anotherTree), testTree<>anotherTree)
+        , (Just $ [(fst anotherEntry, PathDel)], Just testTree, testTree)
         ]
     , testAlONCase "foldlDynDynList can sun"
         (\e -> do
@@ -155,17 +154,17 @@ manipulationTests =
     , testAlONCase "apply2DynDirTree applies"
         (\e -> sampleDirTree . apply2DynDirTree show <$> (followDir [] e))
         mempty
-        [ (Just $ uncurry Map.singleton (fmap DataMod testEntry), Just $ fmap show testTree, fmap show testTree)
+        [ (Just [fmap DataMod testEntry], Just $ fmap show testTree, fmap show testTree)
         , (Nothing, Nothing, fmap show testTree)
-        , (Just $ uncurry Map.singleton (fmap DataMod anotherEntry), Just $ fmap show (testTree<>anotherTree), fmap show $ testTree<>anotherTree)
-        , (Just $ Map.singleton (fst anotherEntry) PathDel, Just $ fmap show testTree, fmap show testTree)
+        , (Just [fmap DataMod anotherEntry], Just $ fmap show (testTree<>anotherTree), fmap show $ testTree<>anotherTree)
+        , (Just [(fst anotherEntry, PathDel)], Just $ fmap show testTree, fmap show testTree)
         ]
     , testAlONCase "mapDynTreeWithKey"
         (\e -> sampleDirTree . mapDynTreeWithKey (\t v -> TE.decodeUtf8 v:t) <$> followDir [(["init"], DataMod $ TE.encodeUtf8 "2")] e)
         (LT.fromList [(["init"], ["2", "init"])])
-        [ ( Just $ Map.singleton ["test"] (DataMod $ TE.encodeUtf8 "1")
+        [ ( Just [(["test"], (DataMod $ TE.encodeUtf8 "1"))]
           , Just $ LT.fromList [(["init"], ["2", "init"]), (["test"], ["1", "test"])], LT.fromList [(["init"], ["2", "init"]), (["test"], ["1", "test"])])
-        , (Just $ Map.singleton ["init"] PathDel, Just $ LT.fromList [(["test"], ["1", "test"])], LT.fromList [(["test"], ["1", "test"])])
+        , (Just $ [(["init"], PathDel)], Just $ LT.fromList [(["test"], ["1", "test"])], LT.fromList [(["test"], ["1", "test"])])
         ]
     ]
 
@@ -196,7 +195,7 @@ transformTests =
         -- This should really be 3 showing it doesn't roll back.
       , (Just (Left $  999 `addUTCTime` startTime), Just (asTree . take 2 $ initialDir), (asTree . take 2 $ initialDir))
       , (Just (Left $ 1000 `addUTCTime` startTime), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
-      , (Just (Right $ Map.fromList $ laterUp), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
+      , (Just (Right $ laterUp), Just (asTree . take 3 $ initialDir), (asTree . take 3 $ initialDir))
       , (Just (Left $ 1600 `addUTCTime` startTime), Just (asTree $ initialDir <> laterUp), (asTree $ initialDir <> laterUp))
       ]
     , let mapUtf8 = fmap (fmap (DataMod . TE.encodeUtf8))
@@ -208,6 +207,6 @@ transformTests =
         d <- followDir (mapUtf8 initialDir) e
         pure $ sampleDirTree $ utf8DecodeDirTree d)
       (LT.fromList initialDir)
-      [ (Just $ Map.fromList $ mapUtf8 extraGood, Just (LT.fromList $ initialDir <> extraGood), (LT.fromList $ initialDir <> extraGood))
+      [ (Just $ mapUtf8 extraGood, Just (LT.fromList $ initialDir <> extraGood), (LT.fromList $ initialDir <> extraGood))
       ]
     ]
