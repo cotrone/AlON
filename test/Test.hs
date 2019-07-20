@@ -236,13 +236,16 @@ transformTests =
       (\e -> do
           fmap show <$> (cacheTemplates =<< followDir initialDir e))
       ("fromList [(\"template.mustache\",Template {name = \"template.mustache\", ast = [TextBlock \"This is my \",Variable True (NamedData [\"template\"]),TextBlock \" for testing\"], partials = fromList []})]", []) []
-    , let initialDir = [(["template.mustache"], DataMod "This is my {{ template } for testing")]
+    , let initialDir = [(["template.mustache"], DataMod "This is my {{ template } for testing")
+                       ,(["sub", "template.mustache"], DataMod "{{")
+                       ]
       in
       testAlONErrorCase "cacheTemplates error"
       (\e -> do
           fmap show <$> (cacheTemplates =<< followDir initialDir e))
       ( "fromList []"
-      , ["template.mustache : \"template.mustache\" (line 1, column 24) - \" \"\n\"}\"\n\"}\"\n\"}}\"\n\".\"\n"]) []
+      , ["template.mustache : \"template.mustache\" (line 1, column 24) - \" \"\n\"}\"\n\"}\"\n\"}}\"\n\".\"\n"
+        ,"sub/template.mustache : \"sub/template.mustache\" (line 1, column 3) - \n\n\n\n\n\n\n\n\n\n\n\n\n\n\"#\"\n\"/\"\n\"&\"\n\"{\"\n\">\"\n\"=\"\n\"^\"\n\"!\"\nwhite space\n\".\"\nwhite space\n\"}}\"\n\".\"\n"]) []
     , let initialDir = [ (["base.mustache"], DataMod "<h2>Names</h2>\n{{#names}}\n{{> user.mustache}}\n{{/names}}")
                        , (["user.mustache"], DataMod "<strong>{{name}}</strong>")
                        ]
@@ -271,5 +274,8 @@ transformTests =
       , ( Just $ Left [(["user.mustache"], PathDel)]
         , Just ("<h2>Names</h2>\n",["PartialNotFound \"user.mustache\""])
         , ("<h2>Names</h2>\n",["PartialNotFound \"user.mustache\""]))
+      , ( Just $ Left [(["base.mustache"], PathDel)]
+        , Just ("",["Couldn't find template base.mustache"])
+        , ("",["Couldn't find template base.mustache"]))
       ]
     ]

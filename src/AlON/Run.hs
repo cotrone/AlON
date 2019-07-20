@@ -27,7 +27,7 @@ import Data.List
 type SiteResult t = DynDirTree t ByteString
 
 type AlONSite =
-  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
+  forall t. (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
   AlONT t (HostFrame t) (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
