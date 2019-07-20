@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
 module AlON.Run (
-    SiteResult, AlONSite, UpdateSite, SetupSite
+    SiteResult, AlONSitePart, AlONSite, UpdateSite, SetupSite
   , runSite
   ) where
 
@@ -26,9 +26,13 @@ import Data.List
 
 type SiteResult t = DynDirTree t ByteString
 
+type AlONSitePart t a =
+  (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
+  AlONT t (HostFrame t) a
+
 type AlONSite =
   forall t. (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
-  AlONT t (HostFrame t) (SiteResult t)
+  AlONSitePart t (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
 
