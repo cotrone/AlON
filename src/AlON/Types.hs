@@ -5,7 +5,6 @@ module AlON.Types (
 
 import Data.Text (Text)
 import Control.Monad.Reader
-import Control.Monad.State
 import Control.Concurrent.EQueue
 import Data.Dependent.Sum (DSum)
 import Data.Functor.Identity
@@ -13,8 +12,8 @@ import Reflex
 import Reflex.Host.Class
 
 newtype AlONT t m a =
-    AlON { unAlON :: (ReaderT (STMEQueue (DSum (EventTrigger t) Identity)) ((StateT (Dynamic t [Text])) m)) a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadFix, MonadState (Dynamic t [Text]))
+    AlON { unAlON :: (ReaderT (STMEQueue (DSum (EventTrigger t) Identity)) (DynamicWriterT t [Text] m)) a }
+  deriving (Functor, Applicative, Monad, MonadIO, MonadFix, DynamicWriter t [Text])
 
 instance MonadTrans (AlONT t ) where
   lift = AlON . lift . lift
@@ -42,13 +41,10 @@ instance MonadReadEvent t m => MonadReadEvent t (AlONT t m) where
 instance MonadSubscribeEvent t m => MonadSubscribeEvent t (AlONT t m) where
   subscribeEvent = lift . subscribeEvent
 
-type AlON a = forall t. Reflex t => AlONT t (HostFrame t) a
+type AlON t a = AlONT t (HostFrame t) a
 
-class (Monad m, MonadIO m, ReflexHost t, MonadFix m, MonadHold t m, MonadSample t m, MonadReflexCreateTrigger t m) => MonadAlON t m where
-  alonLogErrors :: Dynamic t [Text] -> m ()
+class (Monad m, MonadIO m, ReflexHost t, MonadFix m, MonadHold t m, MonadSample t m, MonadReflexCreateTrigger t m, DynamicWriter t [Text] m) => MonadAlON t m where
   askEQ :: m (AnyEQueue (DSum (EventTrigger t) Identity))
 
 instance (Monad m, MonadIO m, Reflex t, ReflexHost t, MonadFix m, MonadHold t m, MonadSample t m, MonadReflexCreateTrigger t m) => MonadAlON t (AlONT t m) where
-  alonLogErrors ne = do
-    get >>= (return . mconcat . (:[ne])) >>= put
   askEQ = AEQ <$> AlON ask

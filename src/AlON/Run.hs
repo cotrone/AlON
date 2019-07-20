@@ -7,7 +7,6 @@ module AlON.Run (
 import Control.Concurrent.EQueue
 import Control.Monad.Trans
 import Control.Monad.Reader
-import Control.Monad.State
 import AlON.Types
 import AlON.Source
 import Data.Time
@@ -28,7 +27,7 @@ import Data.List
 type SiteResult t = DynDirTree t ByteString
 
 type AlONSite =
-  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t), MonadIO (PushM t), MonadIO (PullM t)) =>
+  forall t. (Reflex t, ReflexHost t, Monad (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
   AlONT t (HostFrame t) (SiteResult t)
 
 type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
@@ -42,7 +41,7 @@ runSite herr setup up frm = runSpiderHost $ do
   startTime' <- liftIO getCurrentTime
 
   eq <- newSTMEQueue
-  (o, errD) <- runHostFrame . (`runStateT` (constDyn [])) . (`runReaderT` eq) . unAlON $ frm
+  (o, errD) <- runHostFrame . runDynamicWriterT . (`runReaderT` eq) . unAlON $ frm
 
   pre <- waitEQ eq ReturnImmediate
   fireEvents pre

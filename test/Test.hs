@@ -1,14 +1,17 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 module Main (main) where
 
 import           AlON.Manipulation
 import           AlON.Source
 import           AlON.Transform
 import           Control.Monad
+import           Control.Monad.Fix
 import           Data.Bifunctor
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
+import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import           Data.Time
@@ -16,7 +19,6 @@ import           Data.Time.Clock.POSIX
 import           Data.Time.Format.ISO8601
 import           Reflex
 import           Reflex.Filesystem.Internal
-import           Reflex.Host.Class
 import           Reflex.Test
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -87,13 +89,32 @@ parseTimeGroup =
     timeNonMidnight = Just $ read "2016-03-18 05:27:04Z"
     timeMidnight = Just $ read "2016-03-18 00:00:00Z"
 
+testAlONErrorCase :: (Eq b, Show b)
+                  => TestName
+                  -> (forall t m . (Reflex t, Monad (Dynamic t), MonadHold t m, MonadFix m, DynamicWriter t [T.Text] m)
+                           => Event t a -> m (Dynamic t b))
+                  -> (b, [T.Text]) -- ^ Initial output value expected.
+                  -> [(Maybe a, Maybe (b, [T.Text]), (b, [T.Text]))]
+                  -- ^ Potential update, potential event output, expected output value.
+                  -> TestTree
+testAlONErrorCase tnm frm initVal cgen =
+  testCase tnm $ do
+    eventTrace cgen initVal $ \e -> do
+      (o, errD) <- runDynamicWriterT $ frm e
+      pure $ (,) <$> o <*> errD
+
 testAlONCase :: (Eq b, Show b)
              => TestName
-             -> (forall t. (ReflexHost t) => Event t a -> HostFrame t (Dynamic t b))
+             -> (forall t m . (Reflex t, Monad (Dynamic t), MonadHold t m, MonadFix m)
+                      => Event t a -> m (Dynamic t b))
              -> b -- ^ Initial output value expected.
              -> [(Maybe a, Maybe b, b)] -- ^ Potential update, potential event output, expected output value.
              -> TestTree
-testAlONCase tnm frm initVal cgen = testCase tnm $ eventTrace cgen initVal frm
+testAlONCase tnm frm initVal cgen =
+    testAlONErrorCase tnm frm (augNoErrors initVal) (map (\(me, mo, o) -> (me, fmap augNoErrors mo, augNoErrors o)) cgen)
+  where
+    augNoErrors :: b -> (b, [T.Text])
+    augNoErrors = (, [])
 
 testSelfTest :: TestTree
 testSelfTest =
@@ -208,5 +229,47 @@ transformTests =
         pure $ sampleDirTree $ utf8DecodeDirTree d)
       (LT.fromList initialDir)
       [ (Just $ mapUtf8 extraGood, Just (LT.fromList $ initialDir <> extraGood), (LT.fromList $ initialDir <> extraGood))
+      ]
+    , let initialDir = [(["template.mustache"], DataMod "This is my {{ template }} for testing")]
+      in
+      testAlONErrorCase "cacheTemplates basic"
+      (\e -> do
+          fmap show <$> (cacheTemplates =<< followDir initialDir e))
+      ("fromList [(\"template.mustache\",Template {name = \"template.mustache\", ast = [TextBlock \"This is my \",Variable True (NamedData [\"template\"]),TextBlock \" for testing\"], partials = fromList []})]", []) []
+    , let initialDir = [(["template.mustache"], DataMod "This is my {{ template } for testing")]
+      in
+      testAlONErrorCase "cacheTemplates error"
+      (\e -> do
+          fmap show <$> (cacheTemplates =<< followDir initialDir e))
+      ( "fromList []"
+      , ["template.mustache : \"template.mustache\" (line 1, column 24) - \" \"\n\"}\"\n\"}\"\n\"}}\"\n\".\"\n"]) []
+    , let initialDir = [ (["base.mustache"], DataMod "<h2>Names</h2>\n{{#names}}\n{{> user.mustache}}\n{{/names}}")
+                       , (["user.mustache"], DataMod "<strong>{{name}}</strong>")
+                       ]
+      in
+      testAlONErrorCase "cacheTemplates partial"
+      (\e -> do
+          fmap show <$> (cacheTemplates =<< followDir initialDir e))
+      ("fromList [(\"user.mustache\",Template {name = \"user.mustache\", ast = [TextBlock \"<strong>\",Variable True (NamedData [\"name\"]),TextBlock \"</strong>\"], partials = fromList []}),(\"base.mustache\",Template {name = \"base.mustache\", ast = [TextBlock \"<h2>Names</h2>\\n\",Section (NamedData [\"names\"]) [Partial (Just \"\") \"user.mustache\"]], partials = fromList [(\"user.mustache\",Template {name = \"user.mustache\", ast = [TextBlock \"<strong>\",Variable True (NamedData [\"name\"]),TextBlock \"</strong>\"], partials = fromList []})]})]", []) []
+    , let initialDir = [ (["base.mustache"], DataMod "<h2>Names</h2>\n{{#names}}\n{{> user.mustache}}\n{{/names}}")
+                       , (["user.mustache"], DataMod "<strong>{{name}}</strong>")
+                       ]
+      in
+      testAlONErrorCase "cacheTemplates render"
+      (\e -> do
+          let (de, ve) = fanEither e
+          tc <- cacheTemplates =<< followDir initialDir de
+          v <- (fmap $ Map.singleton ("names"::String) . fmap (Map.singleton ("name"::String))) <$> holdDyn [] ve
+          render "base.mustache" tc v)
+      ("<h2>Names</h2>\n", [])
+      [ ( Just $ Right ["John"::String]
+        , Just ("<h2>Names</h2>\n<strong>John</strong>", [])
+        , ("<h2>Names</h2>\n<strong>John</strong>", []))
+      , ( Just $ Left [(["user.mustache"], DataMod "{{name}}")]
+        , Just ("<h2>Names</h2>\nJohn", [])
+        , ("<h2>Names</h2>\nJohn", []))
+      , ( Just $ Left [(["user.mustache"], PathDel)]
+        , Just ("<h2>Names</h2>\n",["PartialNotFound \"user.mustache\""])
+        , ("<h2>Names</h2>\n",["PartialNotFound \"user.mustache\""]))
       ]
     ]
