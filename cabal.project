@@ -1,4 +1,6 @@
 packages: .
+          ../cryptohash-md5
+          ../AlON-diff
           ../reflex-test
           ../reflex-files
           ../reflex-time
