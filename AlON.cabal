@@ -25,7 +25,7 @@ common deps
       , containers
       , crypto-api
       , deepseq
-      , dependent-sum == 0.4.*
+      , dependent-sum == 0.6.*
       , dependent-map
       , equeue
       , filepath

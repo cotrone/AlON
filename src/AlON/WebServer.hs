@@ -27,9 +27,6 @@ import Network.Wai.Middleware.Cors
 import AlON.Source
 import AlON.Run
 
-data HTTPResource
- = HTML ByteString
-
 data SiteStruct =
   SS { sContent :: DirTree ByteString
      , ssEvents :: DirTree (TChan ServerEvent)
