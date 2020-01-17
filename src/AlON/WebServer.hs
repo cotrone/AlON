@@ -27,12 +27,11 @@ import Network.Wai.Middleware.Cors
 import AlON.Source
 import AlON.Run
 
-data HTTPResource
- = HTML ByteString
-
 data SiteStruct =
   SS { sContent :: DirTree ByteString
+       -- ^ A mapping of the current content.
      , ssEvents :: DirTree (TChan ServerEvent)
+       -- ^ A stream of version updates about the resource.
      }
 
 runWarp :: Warp.Settings -> AlONSite -> IO ()
