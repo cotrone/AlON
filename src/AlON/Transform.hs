@@ -2,6 +2,7 @@
 module AlON.Transform (
     timeGatedDir, parseGateTime
   , utf8DecodeDirTree
+  , gateTransDynDirTree
   , parseYamlHeaded
   , cacheTemplates
   , render
@@ -80,6 +81,13 @@ timeGatedDir (dynTime, _) super = do
             else pure Nothing
         _ -> pure Nothing
     -}
+
+-- | Allows transforming a DynDirTree by removing or transforming files, based on their path.
+--   This is perhaps the most general DynDirTree transform for AlON.
+gateTransDynDirTree :: forall t m m' a b
+               . (Reflex t)
+               => ([Text] -> a -> m' (Maybe b)) -> DynDirTree t a -> m (DynDirTree t b)
+gateTransDynDirTree = error "TODO: Impliment me!"
 
 parseGateTime :: T.Text -> Maybe UTCTime
 parseGateTime t =
