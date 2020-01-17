@@ -2,6 +2,7 @@
 module AlON.Transform (
     timeGatedDir, parseGateTime
   , utf8DecodeDirTree
+  , parseYamlHeaded
   , cacheTemplates
   , render
   ) where
@@ -9,16 +10,23 @@ module AlON.Transform (
 import           AlON.Manipulation
 import           AlON.Source
 --import           AlON.Types
+import           Control.Applicative
 import           Control.Monad.Fix
+import qualified Data.Attoparsec.ByteString as PB
 import           Data.Bifunctor
 import qualified Data.ByteString as BS
+import           Data.Either
 import qualified Data.HashMap.Strict        as HM
+import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import           Data.Time
 import           Data.Witherable
+import           Data.Word
+import           Data.Yaml (FromJSON)
+import qualified Data.Yaml as YAML
 import           Text.Mustache
 import           Text.Mustache.Types
 import           Text.Mustache.Compile
@@ -88,6 +96,37 @@ parseGateTime t =
                   , "%Y-W%W-%w"
                   ]
     zoneFormats = [ "%Z", "%EZ", "" ]
+
+parseYamlHeaded :: FromJSON a => BS.ByteString -> (Maybe a, BS.ByteString)
+parseYamlHeaded =
+    fromRight (error "Failed to parse yaml headed file!") . PB.parseOnly p
+  where
+    parseHeader = do
+      _ <- "---"
+      -- This state machine does not handle all all potential sequences.
+      yamlDash <- PB.scan (0::Word8) (\s w -> case (s, w) of
+                                   ( 0, 10) -> Just 10 -- \n
+                                   ( 0, 13) -> Just 1  -- \r
+                                   ( 1, 10) -> Just 10 -- \r\n
+                                   ( 1, 13) -> Just 10 -- \r\r
+                                   ( 1, 45) -> Just 11 -- \r-
+                                   (10, 10) -> Just 10 -- \n\n
+                                   (10, 45) -> Just 11
+                                   (11, 45) -> Just 12
+                                   (12, 45) -> Just 13
+                                   (13, _) -> Nothing -- after eating the third -- we're always done.
+                                   (_, _) -> Just 0
+                               )
+      let yaml = fromMaybe yamlDash $
+                 PB.choice [ BS.stripSuffix "\n---" yamlDash
+                           , BS.stripSuffix "\r---" yamlDash
+                           , BS.stripSuffix "\r\n---" yamlDash
+                           ]
+      pure . either (error . show) Just . YAML.decodeEither' $ yaml
+    p = do
+      hdr <- parseHeader <|> pure Nothing
+      bdy <- PB.takeByteString
+      pure (hdr, bdy)
 
 render :: forall k t m
        . (ToMustache k, Reflex t, DynamicWriter t [Text] m)

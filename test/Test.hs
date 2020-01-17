@@ -17,11 +17,13 @@ import qualified Data.Text.Encoding as TE
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Data.Time.Format.ISO8601
+import qualified Data.Yaml as YAML
 import           Reflex
 import           Reflex.Filesystem.Internal
 import           Reflex.Test
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           Test.Tasty.TestVector
 
 main :: IO ()
 main = defaultMain tests
@@ -277,5 +279,18 @@ transformTests =
       , ( Just $ Left [(["base.mustache"], PathDel)]
         , Just ("",["Couldn't find template base.mustache"])
         , ("",["Couldn't find template base.mustache"]))
+      ]
+    , testVectors "parseYamlHeaded" (\a b -> b == parseYamlHeaded a)
+      [ ("file data", (Nothing, "file data"))
+      , ("---\ntest: val\n---this is the file\nmore"
+        , (Just (YAML.object [("test", YAML.String "val")]), "this is the file\nmore"))
+      , ("---\ntest: val\r---this is the file\nmore"
+        , (Just (YAML.object [("test", YAML.String "val")]), "this is the file\nmore"))
+      , ("---\ntest: val\r\n---this is the file\nmore"
+        , (Just (YAML.object [("test", YAML.String "val")]), "this is the file\nmore"))
+      , ("---\ntest: val"
+        , (Just (YAML.object [("test", YAML.String "val")]), ""))
+      , ("---\n\n---\nthis is the file\nmore"
+        , (Just YAML.Null, "\nthis is the file\nmore"))
       ]
     ]
