@@ -1,20 +1,14 @@
 packages: .
-          ../cryptohash-md5
           ../AlON-diff
-          ../reflex-test
+          ../reflex
           ../reflex-files
+          ../reflex-test
           ../reflex-time
-          ../list-trie
 
-allow-newer: haskell-src-meta:base
-             haskell-src-meta:template-haskell
-             ref-tf:stm
+allow-newer:
              list-tries:base
              list-tries:containers
-	     reflex
-	     reflex:time
-	     reflex-time:tasty
-	     shelly:time
+	     html-parse:base
 
 package AlON
   ghc-options: -Wall -Werror
