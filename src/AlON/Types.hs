@@ -3,13 +3,13 @@ module AlON.Types (
     AlONT(unAlON), AlON, MonadAlON(..)
   ) where
 
-import Data.Text (Text)
-import Control.Monad.Reader
-import Control.Concurrent.EQueue
-import Data.Dependent.Sum (DSum)
-import Data.Functor.Identity
-import Reflex
-import Reflex.Host.Class
+import           Data.Text (Text)
+import           Control.Monad.Reader
+import           Control.Concurrent.EQueue
+import           Data.Dependent.Sum (DSum)
+import           Data.Functor.Identity
+import           Reflex
+import           Reflex.Host.Class
 
 newtype AlONT t m a =
     AlON { unAlON :: (ReaderT (STMEQueue (DSum (EventTrigger t) Identity)) (DynamicWriterT t [Text] m)) a }

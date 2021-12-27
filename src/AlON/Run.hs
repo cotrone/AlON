@@ -16,7 +16,7 @@ import Reflex
 import Reflex.Host.Class
 import Data.Functor.Misc
 import Data.Functor.Identity
-import Data.Dependent.Map (DSum((:=>)))
+import Data.Dependent.Sum (DSum((:=>)))
 import qualified Data.Dependent.Map as DMap
 import Data.ByteString (ByteString)
 import Control.Monad.Loops

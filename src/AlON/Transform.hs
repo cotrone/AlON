@@ -24,7 +24,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import           Data.Time
-import           Data.Witherable
 import           Data.Word
 import           Data.Yaml (FromJSON)
 import qualified Data.Yaml as YAML
@@ -95,8 +94,7 @@ parseGateTime t =
   where
     s = T.unpack t
     timeFormats = (<>) <$> (weekFormats `mappend` dateFormats) <*> zoneFormats
-    dateFormats = map iso8601DateFormat $
-                  [ Just "%H:%M:%S"
+    dateFormats = [ "%Y-%m-%dT%H:%M:%S"
                   ]
     weekFormats = [ "%Y-W%W-%wT%H:%M:%S"
                   , "%Y-%m-%d"
