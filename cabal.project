@@ -15,8 +15,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://code.xkrd.net/AlON/cryptonite
-  tag: 3b081e3ad027b0550fc87f171dffecbb20dedafe
-  --sha256: 0pg0qxwnz1fxmlmkwkljhf5j5pzkmf3din6k123p5a1226vv27mr
+  tag: 347ef8e34474c24a8bff838d64bed1c7792919ee
+  --sha256: 1dx1mxmc06k094ic89v6kawhdf9w9s7xmd1i2mh9kdg133iwc637
 
 source-repository-package
   type: git
