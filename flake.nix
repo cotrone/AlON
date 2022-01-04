@@ -24,6 +24,10 @@
               ];
               # This adds `js-unknown-ghcjs-cabal` to the shell.
               #shell.crossPlatform = p: [p.ghcjs];
+              modules =
+                [{  enableLibraryProfiling = true;
+                 }
+                ];
             };
         })
       ];
@@ -34,6 +38,6 @@
       };
     in flake // {
       # Built by `nix build .`
-      defaultPackage = flake.packages."AlON:lib:AlON";
+      defaultPackage = flake.packages."AlON:exe:Gallery";
     });
 }

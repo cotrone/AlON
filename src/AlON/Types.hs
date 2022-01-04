@@ -1,15 +1,36 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables, FlexibleInstances, MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ExistentialQuantification, FlexibleContexts, RankNTypes, ScopedTypeVariables, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, StandaloneDeriving, GeneralizedNewtypeDeriving #-}
 module AlON.Types (
-    AlONT(unAlON), AlON, MonadAlON(..)
+    AlONT(unAlON), AlON, MonadAlON(..), AnyContent(..), AlONContent(..)
   ) where
 
-import           Data.Text (Text)
 import           Control.Monad.Reader
 import           Control.Concurrent.EQueue
+import           Data.ByteString.Lazy (ByteString)
 import           Data.Dependent.Sum (DSum)
 import           Data.Functor.Identity
+import           Data.Text (Text)
+import qualified Network.HTTP.Types as HTTP
 import           Reflex
+--import           Reflex.Filesystem.DirTree
 import           Reflex.Host.Class
+
+class AlONContent a where
+  alonContentStatus  :: a -> HTTP.Status
+  alonContentHeaders :: a -> HTTP.ResponseHeaders
+  alonContentBody    :: a -> ByteString
+
+data AnyContent
+  = forall a. (AlONContent a, Show a) => AnyContent a
+
+deriving instance Show AnyContent
+
+instance AlONContent AnyContent where
+  alonContentStatus  (AnyContent c) = alonContentStatus c
+  alonContentHeaders (AnyContent c) = alonContentHeaders c
+  alonContentBody    (AnyContent c) = alonContentBody c
+
+--genericizeContentTree :: AlONContent c => c -> AnyContent
+--genericizeContentTree = AnyContent
 
 newtype AlONT t m a =
     AlON { unAlON :: (ReaderT (STMEQueue (DSum (EventTrigger t) Identity)) (DynamicWriterT t [Text] m)) a }

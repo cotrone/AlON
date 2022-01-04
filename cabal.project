@@ -83,7 +83,8 @@ source-repository-package
 allow-newer: html-parse:base, tasty-test-vector:base, constraints-extras:base, constraints-extras:template-haskell, dependent-sum:some, hlint:ghc-lib-parser, hlint:ghc-lib-parser-ex, tasty-test-vector:tasty, monoidal-containers:base, hedgehog:template-haskell
 
 package AlON
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
+  profiling: True
 
 package list-tries
   coverage: False

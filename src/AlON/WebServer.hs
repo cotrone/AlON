@@ -6,7 +6,6 @@ module AlON.WebServer (
 import Data.Maybe
 import Control.Monad
 import Control.Concurrent.STM
-import Data.ByteString (ByteString)
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import qualified Network.Wai as WAI
 import qualified Network.Wai.Handler.Warp as Warp
@@ -28,11 +27,15 @@ import AlON.Source
 import AlON.Run
 
 data SiteStruct =
-  SS { sContent :: DirTree ByteString
+  SS { sContent :: DirTree AnyContent
        -- ^ A mapping of the current content.
      , ssEvents :: DirTree (TChan ServerEvent)
        -- ^ A stream of version updates about the resource.
      }
+
+contentResponse :: AlONContent a => a -> WAI.Response
+contentResponse a =
+  WAI.responseLBS (alonContentStatus a) (alonContentHeaders a) (alonContentBody a)
 
 runWarp :: Warp.Settings -> AlONSite -> IO ()
 runWarp settings site = do
@@ -54,7 +57,7 @@ runWarp settings site = do
                 cc <- atomically . cloneTChan $ c
                 eventSourceAppIO (atomically . readTChan $ cc) r mk
               Just (d, _) | ("GET" == WAI.requestMethod r) ->
-                mk . WAI.responseBuilder HTTP.status200 [] . fromByteString $ d
+                mk $ contentResponse d
               _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
   let upSite ups = do
        print ups
@@ -67,12 +70,12 @@ runWarp settings site = do
                      return $ SS (LT.delete fp . sContent $ i) (LT.delete fp . ssEvents $ i)
              Just d -> do
                      c <- maybe newTChan return . LT.lookup fp . ssEvents $ i
-                     let h = Crypto.hash' d::Skein_1024_1024
+                     let h = Crypto.hash (alonContentBody d)::Skein_1024_1024
                      writeTChan c $
                        ServerEvent (Just . fromText $ "update")
                                    (Just . fromByteString . B16.encode . S.encode $ h)
                                    []
-                     return $ SS (LT.insert' fp d . sContent $ i) (LT.insert fp c . ssEvents $ i)
+                     return $ SS (LT.insert' fp d . sContent $  i) (LT.insert fp c . ssEvents $ i)
         writeTVar siteState inxt
   runSite (TIO.putStrLn . T.intercalate "\n") startSite upSite site
 

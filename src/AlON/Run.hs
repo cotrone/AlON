@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
 module AlON.Run (
-    SiteResult, AlONSitePart, AlONSite, UpdateSite, SetupSite
+    SiteResult, AlONSitePart, AlONSite, UpdateSite, SetupSite, AlONContent(..), AnyContent
   , runSite
   ) where
 
@@ -12,19 +12,19 @@ import AlON.Source
 import Data.Time
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import Data.Typeable
 import Reflex
 import Reflex.Host.Class
 import Data.Functor.Misc
 import Data.Functor.Identity
 import Data.Dependent.Sum (DSum((:=>)))
 import qualified Data.Dependent.Map as DMap
-import Data.ByteString (ByteString)
 import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
 
-type SiteResult t = DynDirTree t ByteString
+type SiteResult t = DynDirTree t AnyContent
 
 type AlONSitePart t a =
   (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
@@ -34,11 +34,14 @@ type AlONSite =
   forall t. (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
   AlONSitePart t (SiteResult t)
 
-type UpdateSite = [([Text], Maybe ByteString)] -> IO ()
+type UpdateSite = [([Text], Maybe AnyContent)] -> IO ()
 
-type SetupSite = DirTree ByteString -> IO ()
+type SetupSite = DirTree AnyContent -> IO ()
 
 type HandleErrors = [Text] -> IO ()
+
+getConName :: Typeable a => a -> Text
+getConName = T.pack . tyConName . typeRepTyCon . typeOf
 
 runSite :: HandleErrors -> SetupSite -> UpdateSite -> AlONSite -> IO ()
 runSite herr setup up frm = runSpiderHost $ do
@@ -70,7 +73,7 @@ runSite herr setup up frm = runSpiderHost $ do
    - And, since they can't be in the events we got from the update, we know there is no overlap.
    -}
   initialMapping <- sample . current $ o
-  let existingPages'::DMap.DMap (Const2 [Text] ByteString) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
+  let existingPages'::DMap.DMap (Const2 [Text] AnyContent) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
   (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
 
     -- Read the new events
@@ -79,7 +82,7 @@ runSite herr setup up frm = runSpiderHost $ do
     startTime <- liftIO getCurrentTime
 
     pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
-    ec::[([Text], Maybe ByteString)] <- fireEventsAndRead es $ do
+    ec::[([Text], Maybe AnyContent)] <- fireEventsAndRead es $ do
       mchange <- readEvent pageChangeHandle
       changes <- maybe (return mempty) id mchange
       return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
@@ -103,8 +106,8 @@ runSite herr setup up frm = runSpiderHost $ do
     liftIO . herr $ errs
     liftIO . up $ ec++added++removed
 
-    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (T.pack . show $ v)]) added)
-    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ (v::Maybe ByteString)]) removed)
-    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [T.pack . show $ v]) ec)
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
+    liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
 
     return (newMapping, newPages)

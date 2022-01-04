@@ -21,9 +21,11 @@ common deps
       , base >=4.11 && < 4.17
       , base16-bytestring
       , blaze-builder
+      , blaze-html
       , bytestring
       , cereal
       , containers
+      , case-insensitive
       , crypto-api
       , deepseq
       , dependent-sum == 0.7.*
@@ -32,6 +34,7 @@ common deps
       , filepath
       , http-types
       , list-tries
+      , mime
       , monad-loops
       , mtl
       , mustache
@@ -58,17 +61,26 @@ library
   hs-source-dirs:      src
   exposed-modules:
           AlON
-        , AlON.Types
+        , AlON.ContentType.HTML
+        , AlON.ContentType.StaticFile
+        , AlON.Manipulation
+        , AlON.Run
         , AlON.Source
         , AlON.Transform
-        , AlON.Run
+        , AlON.Types
         , AlON.WebServer
-        , AlON.Manipulation
 
 executable mini-site
   import: deps
   ghc-options: -rtsopts -with-rtsopts=-T
   main-is:             Main.hs
+  build-depends:
+      AlON
+
+executable Gallery
+  import: deps
+  ghc-options: -rtsopts -with-rtsopts=-T
+  main-is:             Gallery.hs
   build-depends:
       AlON
 
