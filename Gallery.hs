@@ -38,14 +38,15 @@ main = do
       --now <- liftIO $ getCurrentTime
       --tg <- afterTime tbs (5 `addUTCTime` now)
       dt <- apply2DynDirTree AnyContent . staticize . apply2DynDirTree BL.fromStrict <$> dirSource eq "gallery"
-      gp <- forDynM dt $ \contentTree -> do
-        pure . AnyContent . htmlize $ do
-          HTML5.docTypeHtml $ do
-            HTML5.head $ pure ()
-            HTML5.body $ do
-              HTML5.ul . forM_ (fst <$> LT.toList contentTree) $ \imgPath -> do
-                HTML5.li $ do
-                  HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
+      let gp = do
+            contentTree <- dt
+            pure . AnyContent . htmlize $ do
+              HTML5.docTypeHtml $ do
+                HTML5.head $ pure ()
+                HTML5.body $ do
+                  HTML5.ul . forM_ (fst <$> LT.toList contentTree) $ \imgPath -> do
+                    HTML5.li $ do
+                      HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
       let ft = mergeDynTree dt (constDyn $ LT.singleton [] gp)
       --sample (current ft) >>= mapM (sample . current) >>= liftIO . print
       --mt' <- dirSource eq "math_dir"
