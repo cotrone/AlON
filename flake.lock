@@ -316,6 +316,7 @@
         "flake-utils": "flake-utils",
         "haskellNix": "haskellNix",
         "nixpkgs": [
+          "haskellNix",
           "nixpkgs-unstable"
         ],
         "nixpkgs-unstable": "nixpkgs-unstable_2"
