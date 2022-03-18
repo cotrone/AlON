@@ -14,7 +14,8 @@ import qualified Data.Text.Encoding as TE
 import AlON.ContentType.StaticFile
 import AlON.Run
 
--- | A static file for 
+-- | A piece of AlONContent as a static file
+-- this doesn't include response status or response headers
 data SiteFile = SiteFile {
   siteFileName :: T.Text
 , siteFileContents :: BSL.ByteString
