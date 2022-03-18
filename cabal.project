@@ -47,14 +47,14 @@ source-repository-package
 source-repository-package
   type: git
   location: https://code.xkrd.net/AlON/mustache
-  tag: 7d16dab94299c5e6ce39d66cc51366283eb2a0c1
-  --sha256: 1v000zwbcrgmbwk2603v5a40zqbarh7x0msp1989v3jhm72ym11a
+  tag: 3b906f68d7ccd245a2a8193bb9fbaf151ba9dc02
+  --sha256: sha256-XNLEhviRMqSqT4IekM8dt46cmFzTCzl7wDnCx4umLWc=
 
 source-repository-package
   type: git
   location: https://code.xkrd.net/AlON/patch
-  tag: bad817234c34cb219e58d4621a8adb29433d5e9c
-  --sha256: 088g5sbqb03ja5h4drczr99maqyr543hn1wsz8d97rnzp7xr5c8m
+  tag: 694da8ae948d8b15e1aab69c604909fbc017d5bc
+  --sha256: sha256-CjJ5HdTkO3dcdkd254jrZPPiW6+vZqYoB1I9VAk5g1A=
 
 source-repository-package
   type: git
