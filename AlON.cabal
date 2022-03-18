@@ -66,6 +66,7 @@ library
         , AlON.Manipulation
         , AlON.Run
         , AlON.Source
+        , AlON.Static
         , AlON.Transform
         , AlON.Types
         , AlON.WebServer

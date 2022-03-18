@@ -5,6 +5,7 @@ module AlON.ContentType.StaticFile
  ( StaticFile(..)
  , staticize
  , mimeByFileName, mimeByFileName', defaultMimeMap
+ , defaultFileExtensionMap
  ) where
 
 import           AlON.Types
@@ -23,6 +24,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Network.HTTP.Types as HTTP
 import           Reflex
 import           Reflex.Filesystem.DirTree
+import qualified Data.Map as Map
 
 data StaticFile
  = StaticFile
@@ -205,5 +207,12 @@ defaultMimeMap = LT.fromList $ fmap (second (first (`MIME.Type` [])))
  , (["xz"],  (MIME.Application "x-xz", Nothing))
  , (["ogx"],  (MIME.Application "ogg", Nothing))
  , (["latex"],  (MIME.Application "x-latex", Nothing))
-
  ]
+
+-- | A map from MIME type to file extension
+-- this could be made more explicit to ensure that
+-- MIME types like html are html or htm specifically 
+defaultFileExtensionMap :: Map.Map MIME.Type Text
+defaultFileExtensionMap = Map.fromList $ fmap (\(fExts, (mimeType, _)) -> (mimeType, toFileExtension fExts)) $ LT.toList defaultMimeMap
+  where
+    toFileExtension = T.intercalate "." . fmap CI.original
