@@ -1,54 +1,152 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 module AlON.Static where
 
-import qualified Codec.MIME.Parse as MIME
-import qualified Codec.MIME.Type as MIME
+import qualified Codec.Archive.Tar       as Tar
+import qualified Codec.Archive.Tar.Entry as Tar
+import qualified Codec.Archive.Tar.Index as Tar
+import qualified Control.Monad.State.Strict as Strict
+import Control.Monad.RWS
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Foldable as Foldable
+import qualified Data.CaseInsensitive as CI
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
-import qualified Data.Map as Map
+import Data.Machine
+import Data.Machine.Lift
 import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Builder as TB
+import qualified Data.Tuple as Tuple
+import System.IO
+import qualified Network.HTTP.Types as HTTP
 
-import AlON.ContentType.StaticFile
 import AlON.Run
+import AlON
 
--- | A piece of AlONContent as a static file
--- this doesn't include response status or response headers
-data SiteFile = SiteFile {
-  siteFileName :: T.Text
-, siteFileContents :: BSL.ByteString
+
+
+-- | Build a static site bundle at the given filepath
+staticizeSite :: HandleErrors -> FilePath -> AlONSite -> IO ()
+staticizeSite handleErrors outputFp site = do
+  runSite handleErrors startSite upSite site
+  where
+    upSite update = handleErrors ["Site was updated while generating: " <> T.pack (show update)]
+    startSite siteContent = withTarWriter outputFp (runT_ . (tarSource siteContent ~>))
+    tarSource siteContent =
+      streamStaticContent handleErrors siteContent
+      <> nginxConfig handleErrors (LT.mapMaybe toNginxLocationEntry siteContent)
+
+streamStaticContent :: MonadIO m
+                    => ([T.Text] -> IO ())
+                    -> DirTree AnyContent
+                    -> SourceT m Tar.Entry
+streamStaticContent handleErrors siteContent =
+  unfold dirTreeMinView siteContent ~> mkTarEntry
+  where
+    mkTarEntry = repeatedly $ handleTarError handleErrors . contentTarEntry =<< await
+    contentTarEntry (path, content) = namedTarEntry (T.unpack $ T.intercalate "/" path) (alonContentBody content)
+    dirTreeMinView = fmap Tuple.swap . sequence . Tuple.swap .  LT.minView
+
+nginxConfig :: MonadIO m
+            => ([T.Text] -> IO ())
+            -> DirTree NginxLocationConfig
+            -> (MachineT m k Tar.Entry)
+nginxConfig handleErrors =
+  construct . handleTarError handleErrors . mkNginxTarEntry . renderNginxConfig
+  where
+    mkNginxTarEntry = namedTarEntry "nginx.conf" . BSL.fromStrict . TE.encodeUtf8
+
+handleTarError :: MonadIO m => ([T.Text] -> IO ()) -> Either String o -> PlanT k o m ()
+handleTarError handleErrors = either logTarError (\e -> yield e)
+  where
+    logTarError err = liftIO $ handleErrors [T.pack err]
+
+withTarWriter :: FilePath -> (ProcessT IO Tar.Entry a -> IO r) -> IO r
+withTarWriter fp withSink =
+  withFile fp ReadWriteMode (withSink . execStateM Tar.empty . repeatedly . writeTarEntry)
+  where
+    writeTarEntry tarHandle = do
+      entry <- await
+      index <- Strict.get
+      liftIO $ do
+        Tar.hSeekEntryOffset tarHandle $ Tar.indexNextEntryOffset index
+        BSL.hPut tarHandle $ Tar.write [entry]
+      Strict.put $ Tar.addNextEntry entry index
+
+namedTarEntry :: String -> BSL.ByteString -> Either String Tar.Entry
+namedTarEntry fp contents = do
+  tarPath <- Tar.toTarPath False fp
+  pure $ Tar.fileEntry tarPath contents
+
+data NginxLocationConfig = NginxLocationConfig {
+  nginxHeaders :: HTTP.ResponseHeaders
+, nginxStatus :: Maybe HTTP.Status
 } deriving (Eq, Ord, Show)
 
--- Couldn't think of a better name
--- this is is warnings + errors from turning AlONContent
--- into a static file
-data StaticFileException =
-    ContentHasNoContentType
-  | MimeTypeExtensionNotFound MIME.Type
-  deriving (Eq, Ord, Show)
+type Indent = T.Text -> T.Text
 
--- | Attempt to build a static file for a piece of AlONContent with a path
-contentFile :: AlONContent a => ([T.Text], a) -> Either StaticFileException SiteFile
-contentFile (fPath, content) = do
-  mimeType <- maybe (Left ContentHasNoContentType) Right $ lookupAlONContentType content
-  fExt <- maybe (Left $ MimeTypeExtensionNotFound mimeType) Right $ Map.lookup mimeType defaultFileExtensionMap
-  pure $ SiteFile (mkFileName fExt) (alonContentBody content)
+toNginxLocationEntry :: AnyContent -> Maybe NginxLocationConfig
+toNginxLocationEntry content
+  | requiresConfig = Just $ NginxLocationConfig {
+          nginxHeaders = alonContentHeaders content
+        , nginxStatus = if HTTP.statusCode status /= 200 then Just status else Nothing
+      }
+  | otherwise = Nothing
   where
-    mkFileName ext = T.intercalate "/" fPath <> "." <> ext  
+    status = alonContentStatus content
+    requiresConfig = or [
+        HTTP.statusIsRedirection (alonContentStatus content)
+      , not (null (alonContentHeaders content))
+      ]
 
--- This is a little hacky, we could add a MIME type to AlONContent
-lookupAlONContentType :: AlONContent a => a -> Maybe MIME.Type
-lookupAlONContentType content = do
-  (_, contentTypeHeader) <- Foldable.find ((== "Content-Type") . fst) $ alonContentHeaders content
-  MIME.parseMIMEType $ TE.decodeUtf8 contentTypeHeader
-
-runStatic :: AlONSite -> IO ()
-runStatic site =
-  runSite (TIO.putStrLn . T.intercalate "\n") startSite upSite site
+renderNginxConfig :: DirTree NginxLocationConfig -> T.Text
+renderNginxConfig = runNginxConfigRender renderCfg . renderNginxServerConfig
   where
-    upSite _ = pure ()
-    startSite siteContent = do
-      let allContent = contentFile <$> LT.toList siteContent
-      pure ()
+    renderCfg = NginxRenderConfig {
+        indentOnce = T.append "  "
+      , indentAt = id
+      }
+
+data NginxRenderConfig = NginxRenderConfig {
+  indentOnce :: T.Text -> T.Text
+, indentAt :: T.Text -> T.Text
+}
+
+newtype NginxRenderM a = NginxRenderM {
+  runNginxRenderM :: RWS NginxRenderConfig TB.Builder () a
+} deriving (Functor, Applicative, Monad, MonadReader NginxRenderConfig, MonadWriter TB.Builder)
+
+runNginxConfigRender :: NginxRenderConfig -> NginxRenderM () -> T.Text
+runNginxConfigRender cfg (NginxRenderM renderCfg) =
+  TL.toStrict $ TB.toLazyText $ snd $ evalRWS renderCfg cfg ()
+
+writeLine :: T.Text -> NginxRenderM ()
+writeLine line = do
+  indentTo <- asks indentAt
+  tell $ TB.fromText $ indentTo line
+  tell $ "\n"
+
+indent :: NginxRenderM () -> NginxRenderM ()
+indent = local nextIndent
+  where nextIndent cfg = cfg { indentAt = indentAt cfg . indentOnce cfg}
+
+renderNginxServerConfig :: DirTree NginxLocationConfig -> NginxRenderM ()
+renderNginxServerConfig locations = do
+  writeLine "server {"
+  indent $ do
+    writeLine "root /www/data;"
+    mapM_ renderLocation $ LT.toList locations
+  writeLine "}"
+  where
+    renderLocation (path, location) = do
+      writeLine $ "location " <> (T.intercalate "/" path) <> " {"
+      indent $ do
+        mapM_ addHeader $ nginxHeaders location
+        maybe (pure ()) addReturn $ nginxStatus location
+      writeLine "}"
+      writeLine ""
+    addHeader :: HTTP.Header -> NginxRenderM ()
+    addHeader (name, value) =
+      writeLine $ mconcat ["add_header ", TE.decodeUtf8 $ CI.original name, " ", TE.decodeUtf8 value, ";"] 
+    addReturn status = writeLine $ mconcat ["return ", T.pack (show (HTTP.statusCode status)) ,";"]

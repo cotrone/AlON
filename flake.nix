@@ -1,7 +1,7 @@
 {
   description = "AlON";
 
-  inputs.nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+  inputs.nixpkgs.follows = "nixpkgs-unstable";
   inputs.nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   inputs.haskellNix.url = "github:input-output-hk/haskell.nix";
   inputs.flake-utils.url = "github:numtide/flake-utils";

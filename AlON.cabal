@@ -34,6 +34,7 @@ common deps
       , filepath
       , http-types
       , list-tries
+      , machines
       , mime
       , monad-loops
       , mtl
@@ -46,8 +47,10 @@ common deps
       , safe
       , skein
       , stm
+      , tar
       , text
       , time >= 1.9
+      , transformers
       , unordered-containers
       , wai
       , wai-extra

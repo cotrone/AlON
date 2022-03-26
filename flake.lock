@@ -159,6 +159,7 @@
         "hpc-coveralls": "hpc-coveralls",
         "nix-tools": "nix-tools",
         "nixpkgs": [
+          "haskellNix",
           "nixpkgs-unstable"
         ],
         "nixpkgs-2003": "nixpkgs-2003",
@@ -316,7 +317,6 @@
         "flake-utils": "flake-utils",
         "haskellNix": "haskellNix",
         "nixpkgs": [
-          "haskellNix",
           "nixpkgs-unstable"
         ],
         "nixpkgs-unstable": "nixpkgs-unstable_2"

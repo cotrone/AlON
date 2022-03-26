@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
 module AlON.Run (
-    SiteResult, AlONSitePart, AlONSite, UpdateSite, SetupSite, AlONContent(..), AnyContent
+    SiteResult, AlONSitePart, AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
   , runSite
   ) where
 
