@@ -6,7 +6,7 @@ module AlON.Static where
 import qualified Codec.Archive.Tar       as Tar
 import qualified Codec.Archive.Tar.Entry as Tar
 import Control.Monad.RWS
-import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.CaseInsensitive as CI
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Machine
@@ -23,12 +23,12 @@ import AlON.Run
 import AlON
 
 -- | Build a static site bundle at the given filepath
-staticizeSite :: HandleErrors -> ProcessT IO BSL.ByteString Void -> AlONSite -> IO ()
+staticizeSite :: HandleErrors -> ProcessT IO LBS.ByteString Void -> AlONSite -> IO ()
 staticizeSite handleErrors writeTarStream site = do
   runSite handleErrors startSite upSite site
   where
     upSite update = handleErrors ["Site was updated while generating: " <> T.pack (show update)]
-    startSite siteContent = runT_ $ tarSource siteContent ~> tarWriter ~> writeTarStream
+    startSite siteContent = runT_ $ ((tarSource siteContent ~> tarWriter) <> finalizeTar) ~> writeTarStream
     tarSource siteContent =
       streamStaticContent handleErrors siteContent
       <> nginxConfig handleErrors (LT.mapMaybe toNginxLocationEntry siteContent)
@@ -51,20 +51,23 @@ nginxConfig :: MonadIO m
 nginxConfig handleErrors =
   construct . handleTarError handleErrors . mkNginxTarEntry . renderNginxConfig
   where
-    mkNginxTarEntry = namedTarEntry "nginx.conf" . BSL.fromStrict . TE.encodeUtf8
+    mkNginxTarEntry = namedTarEntry "nginx.conf" . LBS.fromStrict . TE.encodeUtf8
 
 handleTarError :: MonadIO m => ([T.Text] -> IO ()) -> Either String o -> PlanT k o m ()
 handleTarError handleErrors = either logTarError (\e -> yield e)
   where
     logTarError err = liftIO $ handleErrors [T.pack err]
 
-writeToHandle :: Handle -> ProcessT IO BSL.ByteString Void
-writeToHandle h = repeatedly $ liftIO . BSL.hPut h =<< await
+writeToHandle :: Handle -> ProcessT IO LBS.ByteString Void
+writeToHandle h = repeatedly $ liftIO . LBS.hPut h =<< await
 
-tarWriter :: ProcessT IO Tar.Entry BSL.ByteString
-tarWriter = mapping $ \entry -> BSL.dropEnd (512 * 2) $ Tar.write [entry]
+tarWriter :: ProcessT IO Tar.Entry LBS.ByteString
+tarWriter = mapping $ \entry -> LBS.dropEnd (512 * 2) $ Tar.write [entry]
 
-namedTarEntry :: String -> BSL.ByteString -> Either String Tar.Entry
+finalizeTar :: ProcessT IO Tar.Entry LBS.ByteString
+finalizeTar = construct $ yield $ LBS.replicate (512*2) 0
+
+namedTarEntry :: String -> LBS.ByteString -> Either String Tar.Entry
 namedTarEntry fp contents = do
   tarPath <- Tar.toTarPath False fp
   pure $ Tar.fileEntry tarPath contents
