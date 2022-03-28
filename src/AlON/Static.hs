@@ -24,12 +24,12 @@ import AlON
 
 -- | Build a static site bundle at the given filepath
 staticizeSite :: HandleErrors -> ProcessT IO LBS.ByteString Void -> AlONSite -> IO ()
-staticizeSite handleErrors writeTarStream site = do
+staticizeSite handleErrors tarSink site =
   runSite handleErrors startSite upSite site
   where
     upSite update = handleErrors ["Site was updated while generating: " <> T.pack (show update)]
-    startSite siteContent = runT_ $ ((tarSource siteContent ~> tarWriter) <> finalizeTar) ~> writeTarStream
-    tarSource siteContent =
+    startSite siteContent = runT_ $ ((entrySource siteContent ~> tarWriter) <> finalizeTar) ~> tarSink
+    entrySource siteContent =
       streamStaticContent handleErrors siteContent
       <> nginxConfig handleErrors (LT.mapMaybe toNginxLocationEntry siteContent)
 
