@@ -36,6 +36,7 @@ common deps
       , list-tries
       , machines
       , mime
+      , mmorph
       , monad-loops
       , mtl
       , mustache

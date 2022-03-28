@@ -1,6 +1,4 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts, OverloadedStrings, TupleSections #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, GeneralizedNewtypeDeriving, OverloadedStrings, TupleSections #-}
 module AlON.Static where
 
 import qualified Codec.Archive.Tar       as Tar
@@ -54,7 +52,10 @@ nginxConfig handleErrors =
     mkNginxTarEntry = namedTarEntry "nginx.conf" . LBS.fromStrict . TE.encodeUtf8
 
 handleTarError :: MonadIO m => ([T.Text] -> IO ()) -> Either String o -> PlanT k o m ()
-handleTarError handleErrors = either logTarError (\e -> yield e)
+handleTarError handleErrors =
+  -- Lambda is here because plan has a hidden forall m 
+  -- and it can't match the MonadIO m
+  either logTarError (\e -> yield e)
   where
     logTarError err = liftIO $ handleErrors [T.pack err]
 
