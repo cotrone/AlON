@@ -5,34 +5,30 @@ module AlON.Static where
 
 import qualified Codec.Archive.Tar       as Tar
 import qualified Codec.Archive.Tar.Entry as Tar
-import qualified Codec.Archive.Tar.Index as Tar
-import qualified Control.Monad.State.Strict as Strict
 import Control.Monad.RWS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.CaseInsensitive as CI
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Machine
-import Data.Machine.Lift
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Tuple as Tuple
-import System.IO
+import Data.Void
 import qualified Network.HTTP.Types as HTTP
+import System.IO
 
 import AlON.Run
 import AlON
 
-
-
 -- | Build a static site bundle at the given filepath
-staticizeSite :: HandleErrors -> FilePath -> AlONSite -> IO ()
-staticizeSite handleErrors outputFp site = do
+staticizeSite :: HandleErrors -> ProcessT IO BSL.ByteString Void -> AlONSite -> IO ()
+staticizeSite handleErrors writeTarStream site = do
   runSite handleErrors startSite upSite site
   where
     upSite update = handleErrors ["Site was updated while generating: " <> T.pack (show update)]
-    startSite siteContent = withTarWriter outputFp (runT_ . (tarSource siteContent ~>))
+    startSite siteContent = runT_ $ tarSource siteContent ~> tarWriter ~> writeTarStream
     tarSource siteContent =
       streamStaticContent handleErrors siteContent
       <> nginxConfig handleErrors (LT.mapMaybe toNginxLocationEntry siteContent)
@@ -62,17 +58,11 @@ handleTarError handleErrors = either logTarError (\e -> yield e)
   where
     logTarError err = liftIO $ handleErrors [T.pack err]
 
-withTarWriter :: FilePath -> (ProcessT IO Tar.Entry a -> IO r) -> IO r
-withTarWriter fp withSink =
-  withFile fp ReadWriteMode (withSink . execStateM Tar.empty . repeatedly . writeTarEntry)
-  where
-    writeTarEntry tarHandle = do
-      entry <- await
-      index <- Strict.get
-      liftIO $ do
-        Tar.hSeekEntryOffset tarHandle $ Tar.indexNextEntryOffset index
-        BSL.hPut tarHandle $ Tar.write [entry]
-      Strict.put $ Tar.addNextEntry entry index
+writeToHandle :: Handle -> ProcessT IO BSL.ByteString Void
+writeToHandle h = repeatedly $ liftIO . BSL.hPut h =<< await
+
+tarWriter :: ProcessT IO Tar.Entry BSL.ByteString
+tarWriter = mapping $ \entry -> BSL.dropEnd (512 * 2) $ Tar.write [entry]
 
 namedTarEntry :: String -> BSL.ByteString -> Either String Tar.Entry
 namedTarEntry fp contents = do

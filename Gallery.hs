@@ -11,6 +11,7 @@ import qualified Data.Text.IO as TI
 import Network.Wai.Handler.Warp (defaultSettings)
 import qualified Text.Blaze.Html5 as HTML5
 import qualified Text.Blaze.Html5.Attributes as HTML5A
+import System.IO
 
 import AlON.Types
 import AlON.Source
@@ -29,8 +30,9 @@ assert False err = E.throwIO . E.AssertionFailed $ err
 
 main :: IO ()
 main = do
-    staticizeSite (TI.putStrLn . T.intercalate "\n") "gallery.tar" frm
-    runWarp defaultSettings frm
+  withFile "gallery.tar" ReadWriteMode $ \tarHandle ->
+    staticizeSite (TI.putStrLn . T.intercalate "\n") (writeToHandle tarHandle) frm
+  runWarp defaultSettings frm
   where
     frm :: AlONSite
     frm = do
