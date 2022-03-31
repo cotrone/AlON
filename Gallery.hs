@@ -30,8 +30,9 @@ assert False err = E.throwIO . E.AssertionFailed $ err
 
 main :: IO ()
 main = do
-  withFile "gallery.tar" ReadWriteMode $ \tarHandle ->
-    staticizeSite (TI.putStrLn . T.intercalate "\n") (writeToHandle tarHandle) frm
+  withFile "gallery.tar" ReadWriteMode $ \tarHandle -> do
+    staticizeSite (TI.putStrLn . T.intercalate "\n") frm (writeToHandle tarHandle)
+  putStrLn "Static site created"
   runWarp defaultSettings frm
   where
     frm :: AlONSite

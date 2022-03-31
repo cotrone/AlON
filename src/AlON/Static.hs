@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts, GeneralizedNewtypeDeriving, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, BangPatterns, GeneralizedNewtypeDeriving, OverloadedStrings, TupleSections #-}
 module AlON.Static where
 
 import qualified Codec.Archive.Tar       as Tar
@@ -10,8 +10,6 @@ import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Machine
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Tuple as Tuple
 import Data.Void
 import qualified Network.HTTP.Types as HTTP
@@ -20,127 +18,122 @@ import System.IO
 import AlON.Run
 import AlON
 
--- | Build a static site bundle at the given filepath
-staticizeSite :: HandleErrors -> ProcessT IO LBS.ByteString Void -> AlONSite -> IO ()
-staticizeSite handleErrors tarSink site =
+-- | Build a static site bundle, streaming the result as
+-- TAR file chunks
+staticizeSite :: HandleErrors
+              -> AlONSite
+              -> ProcessT IO LBS.ByteString Void
+              -> IO ()
+staticizeSite handleErrors site tarSink =
   runSite handleErrors startSite upSite site
   where
     upSite update = handleErrors ["Site was updated while generating: " <> T.pack (show update)]
-    startSite siteContent = runT_ $ ((entrySource siteContent ~> tarWriter) <> finalizeTar) ~> tarSink
+    startSite siteContent =
+      runT_ $ entrySource siteContent ~> writeTarEntries ~> tarSink
     entrySource siteContent =
-      streamStaticContent handleErrors siteContent
+      alonStaticContent handleErrors siteContent
       <> nginxConfig handleErrors (LT.mapMaybe toNginxLocationEntry siteContent)
 
-streamStaticContent :: MonadIO m
-                    => ([T.Text] -> IO ())
-                    -> DirTree AnyContent
-                    -> SourceT m Tar.Entry
-streamStaticContent handleErrors siteContent =
-  unfold dirTreeMinView siteContent ~> mkTarEntry
+-- | Write a tar archive from a stream of entries
+writeTarEntries :: Monad m => ProcessT m Tar.Entry LBS.ByteString
+writeTarEntries =
+  -- Write every entry to a ByteString
+  -- when that stops, write the archive terminating blocks
+  tarWriter <> finalizeTar
   where
-    mkTarEntry = repeatedly $ handleTarError handleErrors . contentTarEntry =<< await
-    contentTarEntry (path, content) = namedTarEntry (T.unpack $ T.intercalate "/" path) (alonContentBody content)
+    -- The tar library doesn't export a way to write a single entry
+    -- so we have to write a singleton list of entries and remove the
+    -- archive terminating blocks
+    tarWriter = mapping $ \entry -> LBS.dropEnd (512 * 2) $ Tar.write [entry]
+    -- Write a ByteString for the archive terminating blocks
+    finalizeTar = construct $ yield $ LBS.replicate (512*2) 0
+
+
+-- | Write content as a stream of tar entries
+alonStaticContent :: MonadIO m
+                  => HandleErrors
+                  -> DirTree AnyContent
+                  -> SourceT m Tar.Entry
+alonStaticContent handleErrors contentDir =
+  unfold dirTreeMinView contentDir ~> mkTarEntries
+  where
+    mkTarEntries = repeatedly $ do
+      (path, content) <- await
+      let entryPath = T.unpack $ T.intercalate "/" path
+      yieldTarEntry handleErrors entryPath $ alonContentBody content
+    -- Force the minView result into unfold parameters
     dirTreeMinView = fmap Tuple.swap . sequence . Tuple.swap .  LT.minView
+    
 
+-- | Tar archive entries for an nginx config
 nginxConfig :: MonadIO m
-            => ([T.Text] -> IO ())
-            -> DirTree NginxLocationConfig
-            -> (MachineT m k Tar.Entry)
-nginxConfig handleErrors =
-  construct . handleTarError handleErrors . mkNginxTarEntry . renderNginxConfig
+            => HandleErrors
+            -> DirTree NginxLocation
+            -> ProcessT m a Tar.Entry
+nginxConfig handleErrors nginxContent =
+  construct $ yieldTarEntry handleErrors "nginx.conf" nginxConfigContents
   where
-    mkNginxTarEntry = namedTarEntry "nginx.conf" . LBS.fromStrict . TE.encodeUtf8
+    nginxConfigContents = LBS.fromStrict . TE.encodeUtf8 $ renderNginxConfig nginxContent
 
-handleTarError :: MonadIO m => ([T.Text] -> IO ()) -> Either String o -> PlanT k o m ()
-handleTarError handleErrors =
-  -- Lambda is here because plan has a hidden forall m 
-  -- and it can't match the MonadIO m
-  either logTarError (\e -> yield e)
+-- | Yield a tar entry made from a filename and file content
+yieldTarEntry :: MonadIO m
+              => HandleErrors
+              -> String
+              -> LBS.ByteString
+              -> PlanT k Tar.Entry m ()
+yieldTarEntry handleErrors fp contents =
+  either logTarError (\e -> yield e) $ mkTarEntry <$> Tar.toTarPath False fp
   where
-    logTarError err = liftIO $ handleErrors [T.pack err]
+    mkTarEntry tarPath = Tar.fileEntry tarPath contents
+    logTarError err =
+      liftIO $ handleErrors [
+          mconcat ["Error creating tar entry for ",  T.pack fp, ": ", T.pack err]
+        ]
 
+-- | A sink to write lazy ByteStrings to
+-- after the writer is closed, the handle is closed
 writeToHandle :: Handle -> ProcessT IO LBS.ByteString Void
-writeToHandle h = repeatedly $ liftIO . LBS.hPut h =<< await
+writeToHandle h = handleWriter <> closeHandle
+  where
+    handleWriter = repeatedly $ liftIO . LBS.hPut h =<< await
+    -- Close the handle, done after the handleWriter stops
+    -- added because runSite doesn't terminate
+    closeHandle = construct $ liftIO $ hClose h
 
-tarWriter :: ProcessT IO Tar.Entry LBS.ByteString
-tarWriter = mapping $ \entry -> LBS.dropEnd (512 * 2) $ Tar.write [entry]
-
-finalizeTar :: ProcessT IO Tar.Entry LBS.ByteString
-finalizeTar = construct $ yield $ LBS.replicate (512*2) 0
-
-namedTarEntry :: String -> LBS.ByteString -> Either String Tar.Entry
-namedTarEntry fp contents = do
-  tarPath <- Tar.toTarPath False fp
-  pure $ Tar.fileEntry tarPath contents
-
-data NginxLocationConfig = NginxLocationConfig {
-  nginxHeaders :: HTTP.ResponseHeaders
-, nginxStatus :: Maybe HTTP.Status
+-- | An nginx config location
+data NginxLocation = NginxLocation {
+  nginxHeaders :: HTTP.ResponseHeaders -- ^ List of headers to add to the location
+, nginxStatus :: Maybe HTTP.Status -- ^ Optional status to return
 } deriving (Eq, Ord, Show)
 
-type Indent = T.Text -> T.Text
-
-toNginxLocationEntry :: AnyContent -> Maybe NginxLocationConfig
+-- | Turn a piece of content into an nginx config location
+toNginxLocationEntry :: AnyContent -> Maybe NginxLocation
 toNginxLocationEntry content
-  | requiresConfig = Just $ NginxLocationConfig {
-          nginxHeaders = alonContentHeaders content
+  | requiresConfig = Just $ NginxLocation {
+          nginxHeaders = headers
         , nginxStatus = if HTTP.statusCode status /= 200 then Just status else Nothing
       }
   | otherwise = Nothing
   where
+    headers = alonContentHeaders content
     status = alonContentStatus content
     requiresConfig = or [
-        HTTP.statusIsRedirection (alonContentStatus content)
-      , not (null (alonContentHeaders content))
+        HTTP.statusIsRedirection status
+      , not (null headers)
       ]
 
-renderNginxConfig :: DirTree NginxLocationConfig -> T.Text
-renderNginxConfig = runNginxConfigRender renderCfg . renderNginxServerConfig
+renderNginxConfig :: DirTree NginxLocation -> T.Text
+renderNginxConfig locations = do
+  T.intercalate "\n" $ concat $ renderLocation <$> LT.toList locations
   where
-    renderCfg = NginxRenderConfig {
-        indentOnce = T.append "  "
-      , indentAt = id
-      }
-
-data NginxRenderConfig = NginxRenderConfig {
-  indentOnce :: T.Text -> T.Text
-, indentAt :: T.Text -> T.Text
-}
-
-newtype NginxRenderM a = NginxRenderM {
-  runNginxRenderM :: RWS NginxRenderConfig TB.Builder () a
-} deriving (Functor, Applicative, Monad, MonadReader NginxRenderConfig, MonadWriter TB.Builder)
-
-runNginxConfigRender :: NginxRenderConfig -> NginxRenderM () -> T.Text
-runNginxConfigRender cfg (NginxRenderM renderCfg) =
-  TL.toStrict $ TB.toLazyText $ snd $ evalRWS renderCfg cfg ()
-
-writeLine :: T.Text -> NginxRenderM ()
-writeLine line = do
-  indentTo <- asks indentAt
-  tell $ TB.fromText $ indentTo line
-  tell $ "\n"
-
-indent :: NginxRenderM () -> NginxRenderM ()
-indent = local nextIndent
-  where nextIndent cfg = cfg { indentAt = indentAt cfg . indentOnce cfg}
-
-renderNginxServerConfig :: DirTree NginxLocationConfig -> NginxRenderM ()
-renderNginxServerConfig locations = do
-  writeLine "server {"
-  indent $ do
-    writeLine "root /www/data;"
-    mapM_ renderLocation $ LT.toList locations
-  writeLine "}"
-  where
-    renderLocation (path, location) = do
-      writeLine $ "location " <> (T.intercalate "/" path) <> " {"
-      indent $ do
-        mapM_ addHeader $ nginxHeaders location
-        maybe (pure ()) addReturn $ nginxStatus location
-      writeLine "}"
-      writeLine ""
-    addHeader :: HTTP.Header -> NginxRenderM ()
+    -- Render a single location as a list of lines
+    renderLocation (path, location) =
+      ["location " <> (T.intercalate "/" path) <> " {"]
+      <> (indent . addHeader <$> nginxHeaders location)
+      <> (maybe [] ((:[]) . addReturn) $ nginxStatus location)
+      <> ["}" , ""]
+    indent = flip T.append "  "
+    addHeader :: HTTP.Header -> T.Text
     addHeader (name, value) =
-      writeLine $ mconcat ["add_header ", TE.decodeUtf8 $ CI.original name, " ", TE.decodeUtf8 value, ";"] 
-    addReturn status = writeLine $ mconcat ["return ", T.pack (show (HTTP.statusCode status)) ,";"]
+      mconcat ["add_header ", TE.decodeUtf8 $ CI.original name, " ", TE.decodeUtf8 value, ";"] 
+    addReturn status = mconcat ["return ", T.pack (show (HTTP.statusCode status)) ,";"]
