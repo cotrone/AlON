@@ -3,7 +3,7 @@
 {-# LANGUAGE TupleSections #-}
 module AlON.ContentType.StaticFile
  ( StaticFile(..)
- , staticize
+ , staticize, staticizeFile
  , mimeByFileName, mimeByFileName', defaultMimeMap
  , defaultFileExtensionMap
  ) where
@@ -39,11 +39,13 @@ instance AlONContent StaticFile where
   alonContentBody     = _fileContent
 
 staticize :: Functor (Dynamic t) => DynDirTree t ByteString -> DynDirTree t StaticFile
-staticize = mapDynTreeWithKey (\pth dt -> StaticFile (pth2headers pth) dt)
+staticize = mapDynTreeWithKey staticizeFile
+
+staticizeFile :: [Text] -> ByteString -> StaticFile
+staticizeFile pth dt = StaticFile headers dt
   where
-    pth2headers pth =
-      let (mime, menc) = mimeByFileName pth
-      in [("Content-Type", TE.encodeUtf8 . MIME.showType $ mime)]<>((("Content-Encoding",) . TE.encodeUtf8) <$> maybeToList menc)
+    (mime, menc) = mimeByFileName pth
+    headers = [("Content-Type", TE.encodeUtf8 . MIME.showType $ mime)]<>((("Content-Encoding",) . TE.encodeUtf8) <$> maybeToList menc)
 
 type ContentEncoding = Text
 
