@@ -191,7 +191,7 @@ cacheTemplates srcTree = do
         , T.intercalate "\n" . map (T.pack . messageString) . errorMessages $ e
         , "\n" ])) errorList
 
-mapDynWith :: (Reflex t, DynamicWriter t [Text] m, Traversable (Dynamic t))
+mapDynWith :: (Reflex t, DynamicWriter t [Text] m)
            => (Dynamic t a -> m (Dynamic t b))
            -> Dynamic t [Dynamic t a]
            -> m (Dynamic t [b])
