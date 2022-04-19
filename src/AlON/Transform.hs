@@ -35,6 +35,8 @@ import           Reflex
 import           Safe
 import qualified System.FilePath as FP
 
+import Data.Maybe (catMaybes)
+
 -- | Take  TimeBits, and a DirTree. Assuming that the first path segment is a
 --   UTCTime, encoded as ISO 8601, results in a DynDirTree pressenting only
 --   elements who's key starts with a UTCTime not in the future of the pressent time.
@@ -188,3 +190,15 @@ cacheTemplates srcTree = do
         [ T.intercalate "/" p, " : ", T.pack . show . errorPos $ e, " - "
         , T.intercalate "\n" . map (T.pack . messageString) . errorMessages $ e
         , "\n" ])) errorList
+
+evensStrings :: forall t m. (Reflex t, DynamicWriter t [Text] m)
+             => Dynamic t [Int]
+             -> m (Dynamic t [String])
+evensStrings is = _ $ test <$> is
+  where
+    test :: [Int] -> m (Dynamic t [String])
+    test = fmap (sequence . catMaybes) . mapM evenString
+    evenString :: Int -> m (Maybe (Dynamic t String))
+    evenString i 
+      | i `mod` 2 /= 0 = tellDyn (pure [T.pack $ show i <> " is not even"]) >> pure Nothing
+      | otherwise = pure $ Just $ pure $ show i
