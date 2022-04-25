@@ -41,7 +41,6 @@ runWarp :: Warp.Settings -> AlONSite -> IO ()
 runWarp settings site = do
   siteState <- newTVarIO (SS mempty mempty)
   let startSite is = do
-        print is
         cm <- mapM (const newTChanIO) is
         atomically . writeTVar siteState $ SS is cm
         -- fire off warp
