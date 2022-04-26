@@ -58,7 +58,7 @@ alonStaticContent handleErrors contentDir =
   where
     mkTarEntries = repeatedly $ do
       (path, content) <- await
-      let entryPath = T.unpack $ T.intercalate "/" path
+      let entryPath = T.unpack $ T.intercalate "/" ("htdocs":path)
       yieldTarEntry handleErrors entryPath $ alonContentBody content
     -- Force the minView result into unfold parameters
     dirTreeMinView = fmap Tuple.swap . sequence . Tuple.swap .  LT.minView
@@ -81,7 +81,7 @@ yieldTarEntry :: MonadIO m
               -> LBS.ByteString
               -> PlanT k Tar.Entry m ()
 yieldTarEntry handleErrors fp contents =
-  either logTarError (\e -> yield e) $ mkTarEntry <$> Tar.toTarPath False ("htdocs/" <> fp)
+  either logTarError (\e -> yield e) $ mkTarEntry <$> Tar.toTarPath False fp
   where
     mkTarEntry tarPath = Tar.fileEntry tarPath contents
     logTarError err =
