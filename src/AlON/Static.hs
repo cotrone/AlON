@@ -81,7 +81,7 @@ yieldTarEntry :: MonadIO m
               -> LBS.ByteString
               -> PlanT k Tar.Entry m ()
 yieldTarEntry handleErrors fp contents =
-  either logTarError (\e -> yield e) $ mkTarEntry <$> Tar.toTarPath False fp
+  either logTarError (\e -> yield e) $ mkTarEntry <$> Tar.toTarPath False ("htdocs/" <> fp)
   where
     mkTarEntry tarPath = Tar.fileEntry tarPath contents
     logTarError err =
