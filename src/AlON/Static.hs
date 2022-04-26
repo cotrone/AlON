@@ -25,9 +25,8 @@ staticizeSite :: HandleErrors
               -> ProcessT IO LBS.ByteString Void
               -> IO ()
 staticizeSite handleErrors site tarSink =
-  runSite handleErrors startSite upSite site
+  initSite handleErrors startSite site
   where
-    upSite update = handleErrors ["Site was updated while generating: " <> T.pack (show update)]
     startSite siteContent =
       runT_ $ entrySource siteContent ~> writeTarEntries ~> tarSink
     entrySource siteContent =

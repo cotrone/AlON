@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
 module AlON.Run (
     SiteResult, AlONSitePart, AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
-  , runSite
+  , initSite, runSite
   ) where
 
 import Control.Concurrent.EQueue
@@ -42,6 +42,25 @@ type HandleErrors = [Text] -> IO ()
 
 getConName :: Typeable a => a -> Text
 getConName = T.pack . tyConName . typeRepTyCon . typeOf
+
+
+-- | This is just the initialization step of runSite
+-- Just copied over and not reused because the error dynamic from initialization
+-- need to be sampled for updates
+initSite :: HandleErrors -> SetupSite -> AlONSite -> IO ()
+initSite herr setup frm = runSpiderHost $ do
+  startTime' <- liftIO getCurrentTime
+  eq <- newSTMEQueue
+  (o, errD) <- runHostFrame . runDynamicWriterT . (`runReaderT` eq) . unAlON $ frm
+
+  pre <- waitEQ eq ReturnImmediate
+  fireEvents pre
+  fstate <- (sample . current $ o) >>= mapM (sample . current)
+  errs' <- sample . current $ errD
+  liftIO . herr $ errs'
+  liftIO . setup $ fstate
+  finishedTime' <- liftIO getCurrentTime
+  liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
 
 runSite :: HandleErrors -> SetupSite -> UpdateSite -> AlONSite -> IO ()
 runSite herr setup up frm = runSpiderHost $ do
