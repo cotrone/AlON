@@ -3,6 +3,7 @@ module AlON.Static where
 
 import qualified Codec.Archive.Tar       as Tar
 import qualified Codec.Archive.Tar.Entry as Tar
+import Control.Concurrent.MVar
 import Control.Monad.RWS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.CaseInsensitive as CI
@@ -24,11 +25,15 @@ staticizeSite :: HandleErrors
               -> AlONSite
               -> ProcessT IO LBS.ByteString Void
               -> IO ()
-staticizeSite handleErrors site tarSink =
-  initSite handleErrors startSite site
-  where
-    startSite siteContent =
+staticizeSite handleErrors site tarSink = do
+  siteStarted <- newEmptyMVar
+  let
+    startSite siteContent = do
       runT_ $ entrySource siteContent ~> writeTarEntries ~> tarSink
+      putMVar siteStarted ()
+  initSite handleErrors startSite site
+  readMVar siteStarted
+  where
     entrySource siteContent =
       alonStaticContent handleErrors siteContent
       <> nginxConfig handleErrors (LT.mapMaybe toNginxLocationEntry siteContent)
