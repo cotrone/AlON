@@ -311,8 +311,10 @@ staticTests =
     [ testVectors "nginxPath" (\a b -> b == nginxPath a)
       [ (["a"], ["a", "index.html"])
       , (["a.js"], ["a.js"])
+      , (["a", "b.js"], ["a", "b.js"])
       , ([], ["index.html"])
       , (["a", "b"], ["a", "b", "index.html"])
       , (["a", "b.jpeg"], ["a", "b.jpeg"])
+      , (["a", "b", "c.jpeg"], ["a", "b", "c.jpeg"])
       ]
     ]
