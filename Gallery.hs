@@ -53,7 +53,7 @@ main = do
                   HTML5.ul . forM_ (fst <$> LT.toList contentTree) $ \imgPath -> do
                     HTML5.li $ do
                       HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
-      let ft = mergeDynTree dt (constDyn $ LT.singleton ["index.html"] gp)
+      let ft = mergeDynTree dt (constDyn $ LT.singleton [] gp)
       --sample (current ft) >>= mapM (sample . current) >>= liftIO . print
       --mt' <- dirSource eq "math_dir"
       --let mt = (\tgb d -> if tgb then d else mempty) <$> tg <*> mt'

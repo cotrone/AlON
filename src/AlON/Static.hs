@@ -7,6 +7,7 @@ import Control.Concurrent.MVar
 import Control.Monad.RWS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.CaseInsensitive as CI
+import qualified Data.List as List
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Machine
 import qualified Data.Text as T
@@ -63,11 +64,25 @@ alonStaticContent handleErrors contentDir =
   where
     mkTarEntries = repeatedly $ do
       (path, content) <- await
-      let entryPath = T.unpack $ T.intercalate "/" ("htdocs":path)
+      let entryPath = T.unpack $ T.intercalate "/" ("htdocs":nginxPath path)
       yieldTarEntry handleErrors entryPath $ alonContentBody content
     -- Force the minView result into unfold parameters
     dirTreeMinView = fmap Tuple.swap . sequence . Tuple.swap .  LT.minView
-    
+
+-- | Turn paths from the dir tree into nginx paths
+-- ideally this would check to make sure the content is html
+nginxPath :: [T.Text] -> [T.Text]
+nginxPath = maybe [indexPath] addIndex . splitPath
+  where
+    indexPath = "index.html"
+    splitPath = fmap (fmap reverse) . List.uncons . reverse
+    addIndex :: (T.Text, [T.Text]) -> [T.Text]
+    addIndex (name, path) =
+      path <>
+        case T.splitOn "." name of
+          [] -> [indexPath] -- Empty file name, should make an index for the path
+          (noExtension:[]) -> [noExtension, indexPath] -- The file has no extension and a path should be made
+          _ -> [name] -- The name has an extension we should keep, no need to add an index
 
 -- | Tar archive entries for an nginx config
 nginxConfig :: MonadIO m

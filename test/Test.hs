@@ -6,6 +6,7 @@ module Main (main) where
 
 import           AlON.Manipulation
 import           AlON.Source
+import           AlON.Static
 import           AlON.Transform
 import           Control.Monad
 import           Control.Monad.Fix
@@ -34,6 +35,7 @@ tests = testGroup "AlON Tests" $
     , testSelfTest
     , manipulationTests
     , transformTests
+    , staticTests
     ]
 
 parseTimeGroup :: TestTree
@@ -292,5 +294,25 @@ transformTests =
         , (Just (YAML.object [("test", YAML.String "val")]), ""))
       , ("---\n\n---\nthis is the file\nmore"
         , (Just YAML.Null, "\nthis is the file\nmore"))
+      ]
+    ]
+
+
+{-
+ ["a"] -> ["a", "index.html"]
+ ["a.jpeg"] -> ["a.jpeg"]
+ [] -> ["index.html"]
+ ["a", "b"] -> ["a", "b", "index.html"]
+ ["a", "b.jpeg"] -> ["a", "b.jpeg"]
+-}
+staticTests :: TestTree
+staticTests =
+  testGroup "Static Tests" $
+    [ testVectors "nginxPath" (\a b -> b == nginxPath a)
+      [ (["a"], ["a", "index.html"])
+      , (["a.js"], ["a.js"])
+      , ([], ["index.html"])
+      , (["a", "b"], ["a", "b", "index.html"])
+      , (["a", "b.jpeg"], ["a", "b.jpeg"])
       ]
     ]
