@@ -147,7 +147,7 @@ renderNginxConfig locations = do
   where
     -- Render a single location as a list of lines
     renderLocation (path, location) =
-      ["location " <> (T.intercalate "/" path) <> " {"]
+      ["location " <> ("/" <> T.intercalate "/" path) <> " {"]
       <> (indent . addHeader <$> nginxHeaders location)
       <> (maybe [] ((:[]) . addReturn) $ nginxStatus location)
       <> ["}" , ""]
