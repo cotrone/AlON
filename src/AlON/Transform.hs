@@ -147,7 +147,7 @@ render nm t v = do
     applyTemplate tc actV =
      case HM.lookup (T.unpack nm) tc of
        Nothing -> (["Couldn't find template " `T.append` nm], mempty)
-       Just tmpl -> (first $ map $ T.pack . show) . checkedSubstitute tmpl $ actV
+       Just tmpl -> (first $ map $ ((nm <> ": ") <>) . T.pack . show) . checkedSubstitute tmpl $ actV
 
 utf8DecodeDirTree :: Functor (Dynamic t)
                   => DynDirTree t BS.ByteString -> DynDirTree t T.Text
