@@ -154,5 +154,5 @@ renderNginxConfig locations = do
     indent = flip T.append "  "
     addHeader :: HTTP.Header -> T.Text
     addHeader (name, value) =
-      mconcat ["add_header ", TE.decodeUtf8 $ CI.original name, " ", TE.decodeUtf8 value, ";"] 
+      mconcat ["add_header '", TE.decodeUtf8 $ CI.original name, "' '", TE.decodeUtf8 value, "';"] 
     addReturn status = mconcat ["return ", T.pack (show (HTTP.statusCode status)) ,";"]
