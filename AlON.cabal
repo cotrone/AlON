@@ -20,6 +20,7 @@ common deps
       , attoparsec
       , base >=4.11 && < 4.17
       , base16-bytestring
+      , bifunctors
       , blaze-builder
       , blaze-html
       , bytestring
@@ -41,8 +42,11 @@ common deps
       , mtl
       , mustache
       , parsec
+      , primitive
+      , ref-tf
       , reflex
       , reflex-files
+      , reflex-fsnotify
       , reflex-time
       , resourcet
       , safe

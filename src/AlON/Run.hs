@@ -1,9 +1,11 @@
-{-# LANGUAGE OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
+{-# LANGUAGE KindSignatures, OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 module AlON.Run (
     SiteResult, AlONSitePart, AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
   , initSite, runSite
   ) where
 
+import Control.Concurrent.Chan
 import Control.Concurrent.EQueue
 import Control.Monad.Trans
 import Control.Monad.Reader
@@ -23,6 +25,9 @@ import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
+import Data.IORef
+import Control.Monad.Ref
+import Control.Monad.Primitive
 
 type SiteResult t = DynDirTree t AnyContent
 
@@ -39,6 +44,37 @@ type UpdateSite = [([Text], Maybe AnyContent)] -> IO ()
 type SetupSite = DirTree AnyContent -> IO ()
 
 type HandleErrors = [Text] -> IO ()
+
+type SimpleAlONSite t m =
+  (Ref m ~ Ref IO, ReflexHost t , MonadIO (HostFrame t), PrimMonad (HostFrame t)
+  , PostBuild t m, PerformEvent t m)
+    => Event t () -- Post build event
+    -> m (Dynamic t (DirTree AnyContent))
+
+hostSimpleAlON :: (forall t m. SimpleAlONSite t m) -> SetupSite -> IO ()
+hostSimpleAlON site setup =
+  runSpiderHost $ do
+    -- Create a new event for the post build
+    (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+
+    -- build the network for the site
+    (siteBehavior, FireCommand fire) <- hostPerformEventT $ runPostBuildT (site postBuild) postBuild
+
+    -- Subscribe to changes in the site behaviour
+    forever $ do
+      liftIO (readIORef postBuildTriggerRef) >>= \case
+        Nothing -> pure ()
+        Just postBuildTrigger -> do
+          fire [postBuildTrigger :=> Identity ()] (sample $ current siteBehavior) >>= \case
+            [] -> pure ()
+            [s] -> liftIO $ setup s
+            _ -> 
+              -- Multiple cases might be okay, not sure what order they would be in or
+              -- what that would mean
+              -- I think that the last element is the most recent
+              fail "Multiple siteRef readEvent results" 
+
+
 
 getConName :: Typeable a => a -> Text
 getConName = T.pack . tyConName . typeRepTyCon . typeOf

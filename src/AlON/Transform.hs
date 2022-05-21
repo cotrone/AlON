@@ -12,7 +12,6 @@ import           AlON.Manipulation
 import           AlON.Source
 --import           AlON.Types
 import           Control.Applicative
-import           Control.Monad.Fix
 import qualified Data.Attoparsec.ByteString as PB
 import           Data.Bifunctor
 import qualified Data.ByteString as BS
@@ -55,9 +54,9 @@ import qualified System.FilePath as FP
 --   Once an entry has gone live, it should not stop being available.
 --   The specific affect of this is that you may see an entry with an apparently future
 --   time during a leap second where the clock jumps backwards.
-timeGatedDir :: forall t m a
-             . (Reflex t, MonadHold t m, MonadFix m)
-             => TimeBits t -> DynDirTree t a -> m (DynDirTree t a)
+timeGatedDir :: forall t f a
+             . (Reflex t, Applicative f)
+             => TimeBits t -> DynDirTree t a -> f (DynDirTree t a)
 timeGatedDir (dynTime, _) super = do
     pure $ filterTimes <$> dynTime <*> super
     --buildDynamic (trans =<< sample (current super)) $ pushAlways trans (updated super)
