@@ -56,9 +56,9 @@ import qualified System.FilePath as FP
 --   time during a leap second where the clock jumps backwards.
 timeGatedDir :: forall t f a
              . (Reflex t, Applicative f)
-             => TimeBits t -> DynDirTree t a -> f (DynDirTree t a)
-timeGatedDir (dynTime, _) super = do
-    pure $ filterTimes <$> dynTime <*> super
+             => Dynamic t UTCTime -> DynDirTree t a -> f (DynDirTree t a)
+timeGatedDir clock super = do
+    pure $ filterTimes <$> clock <*> super
     --buildDynamic (trans =<< sample (current super)) $ pushAlways trans (updated super)
   where
     filterTimes :: UTCTime -> DirTree (Dynamic t a) -> DirTree (Dynamic t a)

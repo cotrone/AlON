@@ -1,4 +1,4 @@
-{-# LANGUAGE BlockArguments, OverloadedStrings, ScopedTypeVariables, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE BlockArguments, OverloadedStrings, ScopedTypeVariables, FlexibleContexts, RankNTypes, TypeFamilies #-}
 module Main where
 
 import Control.Monad
@@ -12,6 +12,7 @@ import Network.Wai.Handler.Warp (defaultSettings)
 import qualified Text.Blaze.Html5 as HTML5
 import qualified Text.Blaze.Html5.Attributes as HTML5A
 import System.IO
+import Control.Monad.IO.Class
 
 import AlON.Types
 import AlON.Source
@@ -34,28 +35,21 @@ main = do
     staticizeSite (TI.putStrLn . T.intercalate "\n") frm (writeToHandle tarHandle)
   putStrLn "Static site created"
   runWarp defaultSettings frm
-  where
-    frm :: AlONSite
-    frm = do
-      eq <- askEQ
 
-      --et <- time eq 1
-      --let tbs = utc2TimeBits et
-      --now <- liftIO $ getCurrentTime
-      --tg <- afterTime tbs (5 `addUTCTime` now)
-      dt <- apply2DynDirTree AnyContent . staticize . apply2DynDirTree BL.fromStrict <$> dirSource eq "gallery"
-      let gp = do
-            contentTree <- dt
-            pure . AnyContent . htmlize $ do
-              HTML5.docTypeHtml $ do
-                HTML5.head $ pure ()
-                HTML5.body $ do
-                  HTML5.ul . forM_ (fst <$> LT.toList contentTree) $ \imgPath -> do
-                    HTML5.li $ do
-                      HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
-      let ft = mergeDynTree dt (constDyn $ LT.singleton [] gp)
-      --sample (current ft) >>= mapM (sample . current) >>= liftIO . print
-      --mt' <- dirSource eq "math_dir"
-      --let mt = (\tgb d -> if tgb then d else mempty) <$> tg <*> mt'
-      --let pt = mt -- mapDynTreeWithKey (\_ ds -> snd . runProcess $ (RunExternal "dc" [] ds)) mt
-      pure ft --  $ mergeDynTree pt dt
+frm :: Reflex t => SimpleAlONSite t m 
+frm = do
+  postBuild <- getPostBuild
+  performEvent $ (liftIO $ putStrLn "build fired") <$ postBuild
+  gFp <- holdDyn "gallery" ("gallery" <$ postBuild)
+  dir <- dirSource gFp
+  let dt = apply2DynDirTree AnyContent . staticize $ apply2DynDirTree BL.fromStrict dir
+  let gp = do
+        contentTree <- dt
+        pure . AnyContent . htmlize $ do
+          HTML5.docTypeHtml $ do
+            HTML5.head $ pure ()
+            HTML5.body $ do
+              HTML5.ul . forM_ (fst <$> LT.toList contentTree) $ \imgPath -> do
+                HTML5.li $ do
+                  HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
+  pure $ mergeDynTree dt (constDyn $ LT.singleton [] gp)

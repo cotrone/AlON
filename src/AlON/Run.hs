@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 module AlON.Run (
     SiteResult, AlONSitePart, AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
-  , initSite, runSite
+  , initSite, runSite, SimpleAlONSite, hostSimpleAlON, initSimpleAlON
   ) where
 
 import Control.Concurrent.Chan
@@ -28,6 +28,8 @@ import Data.List
 import Data.IORef
 import Control.Monad.Ref
 import Control.Monad.Primitive
+import AlON.ContentType.StaticFile
+import Reflex.Host.Headless
 
 type SiteResult t = DynDirTree t AnyContent
 
@@ -45,36 +47,25 @@ type SetupSite = DirTree AnyContent -> IO ()
 
 type HandleErrors = [Text] -> IO ()
 
-type SimpleAlONSite t m =
-  (Ref m ~ Ref IO, ReflexHost t , MonadIO (HostFrame t), PrimMonad (HostFrame t)
-  , PostBuild t m, PerformEvent t m)
-    => Event t () -- Post build event
-    -> m (Dynamic t (DirTree AnyContent))
+type SimpleAlONSite t m = MonadHeadlessApp t m => m (DynDirTree t AnyContent)
 
 hostSimpleAlON :: (forall t m. SimpleAlONSite t m) -> SetupSite -> IO ()
 hostSimpleAlON site setup =
-  runSpiderHost $ do
-    -- Create a new event for the post build
-    (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+  runHeadlessApp $ do
+    siteBehavior <- flattenDynDirTree <$> site
+    postBuild <- getPostBuild
+    performEvent_ $ liftIO . setup <$> pushAlways (const $ sample $ current siteBehavior) postBuild
+    performEvent_ $ liftIO . setup <$> updated siteBehavior
+    pure never
 
-    -- build the network for the site
-    (siteBehavior, FireCommand fire) <- hostPerformEventT $ runPostBuildT (site postBuild) postBuild
-
-    -- Subscribe to changes in the site behaviour
-    forever $ do
-      liftIO (readIORef postBuildTriggerRef) >>= \case
-        Nothing -> pure ()
-        Just postBuildTrigger -> do
-          fire [postBuildTrigger :=> Identity ()] (sample $ current siteBehavior) >>= \case
-            [] -> pure ()
-            [s] -> liftIO $ setup s
-            _ -> 
-              -- Multiple cases might be okay, not sure what order they would be in or
-              -- what that would mean
-              -- I think that the last element is the most recent
-              fail "Multiple siteRef readEvent results" 
-
-
+initSimpleAlON :: (forall t m. SimpleAlONSite t m) -> SetupSite -> IO ()
+initSimpleAlON site setup =
+  runHeadlessApp $ do
+    siteBehavior <- flattenDynDirTree <$> site
+    postBuild <- getPostBuild
+    setupEvent <- performEvent $ liftIO . setup <$> pushAlways (const $ sample $ current siteBehavior) postBuild
+    -- Quit after the setup event has been performed
+    pure setupEvent
 
 getConName :: Typeable a => a -> Text
 getConName = T.pack . tyConName . typeRepTyCon . typeOf

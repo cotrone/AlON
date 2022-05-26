@@ -2,12 +2,6 @@ packages: .
 
 source-repository-package
   type: git
-  location: git@github.com:cotrone/reflex-fsnotify.git
-  tag: 566872dd72280d091d73328694530d731ddf1836
-  --sha256: 19yw3afi9b45iv1dd4m3bb5c02ns7dhcnw9xx44wdl2551ll38w8
-
-source-repository-package
-  type: git
   location: https://code.xkrd.net/AlON/AlON-diff
   tag: 250cd0b4d48f3eac72b8b460b1694226f5d8be94
   --sha256: 1kcv6cza50jdawfq81xm0lygmaxbqig3wvli27p528s6ghbxw93x
@@ -71,8 +65,14 @@ source-repository-package
 source-repository-package
   type: git
   location: https://code.xkrd.net/AlON/reflex-files
-  tag: 00bcf7d6e5b655e5660c71dc37ace836d2f41d6e
-  --sha256: 0hqcnsix4kqa1sxicim8z5qdrnzmchxphwprifns5hrgj669g9c6
+  tag: 96a4395fc12f78513d7e86d9f4faca54789671cd
+  --sha256: 0ba2cwvfbl2ajyrbnxsbnbh3z7qdlfgmrirmn97ym4k63wq45dby
+
+source-repository-package
+  type: git
+  location: https://code.xkrd.net/tolt/reflex-fsnotify
+  tag: 7c4853364967a6bfa197da7c692485834e87bb8c
+  --sha256: 06g5mf0bc204rl2nrx1ki8d4bf32yv1yxcwz72wamc3q4iqc2liz
 
 source-repository-package
   type: git

@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts, BangPatterns, GeneralizedNewtypeDeriving, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, BangPatterns, GeneralizedNewtypeDeriving, OverloadedStrings, TupleSections, TypeFamilies #-}
 module AlON.Static where
 
 import qualified Codec.Archive.Tar       as Tar
@@ -23,7 +23,7 @@ import AlON
 -- | Build a static site bundle, streaming the result as
 -- TAR file chunks
 staticizeSite :: HandleErrors
-              -> AlONSite
+              -> (forall t m. SimpleAlONSite t m) 
               -> ProcessT IO LBS.ByteString Void
               -> IO ()
 staticizeSite handleErrors site tarSink = do
@@ -32,7 +32,7 @@ staticizeSite handleErrors site tarSink = do
     startSite siteContent = do
       runT_ $ entrySource siteContent ~> writeTarEntries ~> tarSink
       putMVar siteStarted ()
-  initSite handleErrors startSite site
+  initSimpleAlON site startSite
   readMVar siteStarted
   where
     entrySource siteContent =

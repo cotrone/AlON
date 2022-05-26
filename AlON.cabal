@@ -33,6 +33,7 @@ common deps
       , dependent-map
       , equeue
       , filepath
+      , fsnotify
       , http-types
       , list-tries
       , machines
