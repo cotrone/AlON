@@ -1,11 +1,10 @@
-{-# LANGUAGE KindSignatures, OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, GADTs #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE KindSignatures, OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE LambdaCase, ConstraintKinds #-}
 module AlON.Run (
-    SiteResult, AlONSitePart, AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
-  , initSite, runSite, SimpleAlONSite, hostSimpleAlON, initSimpleAlON
+    AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
+  , initSite, runSite
   ) where
 
-import Control.Concurrent.Chan
 import Control.Concurrent.EQueue
 import Control.Monad.Trans
 import Control.Monad.Reader
@@ -25,21 +24,7 @@ import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
-import Data.IORef
 import Control.Monad.Ref
-import Control.Monad.Primitive
-import AlON.ContentType.StaticFile
-import Reflex.Host.Headless
-
-type SiteResult t = DynDirTree t AnyContent
-
-type AlONSitePart t a =
-  (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
-  AlONT t (HostFrame t) a
-
-type AlONSite =
-  forall t. (Reflex t, ReflexHost t, MonadIO (HostFrame t), MonadSubscribeEvent t (HostFrame t)) =>
-  AlONSitePart t (SiteResult t)
 
 type UpdateSite = [([Text], Maybe AnyContent)] -> IO ()
 
@@ -47,58 +32,63 @@ type SetupSite = DirTree AnyContent -> IO ()
 
 type HandleErrors = [Text] -> IO ()
 
-type SimpleAlONSite t m = MonadHeadlessApp t m => m (DynDirTree t AnyContent)
+type EQueueT t = STMEQueue (DSum (EventTrigger t) Identity)
 
-hostSimpleAlON :: (forall t m. SimpleAlONSite t m) -> SetupSite -> IO ()
-hostSimpleAlON site setup =
-  runHeadlessApp $ do
-    siteBehavior <- flattenDynDirTree <$> site
-    postBuild <- getPostBuild
-    performEvent_ $ liftIO . setup <$> pushAlways (const $ sample $ current siteBehavior) postBuild
-    performEvent_ $ liftIO . setup <$> updated siteBehavior
-    pure never
+type MonadAlON' t m = 
+  ( MonadFix m
+  , MonadHold t m
+  , MonadIO (HostFrame t)
+  , MonadIO (Performable m)
+  , MonadIO m
+  , MonadReader (EQueueT t) m
+  , MonadRef (HostFrame t)
+  , MonadSubscribeEvent t (HostFrame t)
+  , PerformEvent t m
+  , ReflexHost t
+  , Reflex t
+  )
 
-initSimpleAlON :: (forall t m. SimpleAlONSite t m) -> SetupSite -> IO ()
-initSimpleAlON site setup =
-  runHeadlessApp $ do
-    siteBehavior <- flattenDynDirTree <$> site
-    postBuild <- getPostBuild
-    setupEvent <- performEvent $ liftIO . setup <$> pushAlways (const $ sample $ current siteBehavior) postBuild
-    -- Quit after the setup event has been performed
-    pure setupEvent
+type AlONSite = forall t m. MonadAlON' t m => m (DynDirTree t AnyContent)
 
 getConName :: Typeable a => a -> Text
 getConName = T.pack . tyConName . typeRepTyCon . typeOf
+
+initSite :: HandleErrors -> SetupSite -> AlONSite -> IO ()
+initSite herr setup frm =
+  withSpiderTimeline $ runSpiderHostForTimeline $ do
+    startTime' <- liftIO getCurrentTime
+    eq <- newSTMEQueue
+    ((siteRes, errD), FireCommand fire) <-
+      hostPerformEventT $
+        runDynamicWriterT $
+          (`runReaderT` eq) frm
+
+    pre <- waitEQ eq ReturnImmediate
+    _ <- fire pre $ pure ()
+    fstate <- (sample . current $ siteRes) >>= mapM (sample . current)
+    errs' <- sample . current $ errD
+    liftIO . herr $ errs'
+    liftIO . setup $ fstate
+    finishedTime' <- liftIO getCurrentTime
+    liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
 
 
 -- | This is just the initialization step of runSite
 -- Just copied over and not reused because the error dynamic from initialization
 -- need to be sampled for updates
-initSite :: HandleErrors -> SetupSite -> AlONSite -> IO ()
-initSite herr setup frm = runSpiderHost $ do
-  startTime' <- liftIO getCurrentTime
-  eq <- newSTMEQueue
-  (o, errD) <- runHostFrame . runDynamicWriterT . (`runReaderT` eq) . unAlON $ frm
-
-  pre <- waitEQ eq ReturnImmediate
-  fireEvents pre
-  fstate <- (sample . current $ o) >>= mapM (sample . current)
-  errs' <- sample . current $ errD
-  liftIO . herr $ errs'
-  liftIO . setup $ fstate
-  finishedTime' <- liftIO getCurrentTime
-  liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
-
 runSite :: HandleErrors -> SetupSite -> UpdateSite -> AlONSite -> IO ()
 runSite herr setup up frm = runSpiderHost $ do
   startTime' <- liftIO getCurrentTime
 
   eq <- newSTMEQueue
-  (o, errD) <- runHostFrame . runDynamicWriterT . (`runReaderT` eq) . unAlON $ frm
+  ((siteRes, errD), FireCommand fire) <-
+    hostPerformEventT $
+      runDynamicWriterT $
+        (`runReaderT` eq) frm
 
   pre <- waitEQ eq ReturnImmediate
-  fireEvents pre
-  fstate <- (sample . current $ o) >>= mapM (sample . current)
+  _ <- fire pre $ pure ()
+  fstate <- (sample . current $ siteRes) >>= mapM (sample . current)
   errs' <- sample . current $ errD
   liftIO . herr $ errs'
   liftIO . setup $ fstate
@@ -118,7 +108,7 @@ runSite herr setup up frm = runSpiderHost $ do
    - Anything left from removing the new tree from the old is a deleted entry.
    - And, since they can't be in the events we got from the update, we know there is no overlap.
    -}
-  initialMapping <- sample . current $ o
+  initialMapping <- sample . current $ siteRes
   let existingPages'::DMap.DMap (Const2 [Text] AnyContent) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
   (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
 
@@ -128,12 +118,12 @@ runSite herr setup up frm = runSpiderHost $ do
     startTime <- liftIO getCurrentTime
 
     pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
-    ec::[([Text], Maybe AnyContent)] <- fireEventsAndRead es $ do
+    ec::[([Text], Maybe AnyContent)] <- fmap concat $ fire es $ do
       mchange <- readEvent pageChangeHandle
       changes <- maybe (return mempty) id mchange
       return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
 
-    newMapping <- sample . current $ o
+    newMapping <- sample . current $ siteRes
 
     let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
     added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 

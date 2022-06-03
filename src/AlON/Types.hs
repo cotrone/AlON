@@ -2,7 +2,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 module AlON.Types (
-    AlONT(unAlON), AlON, MonadAlON(..), AnyContent(..), AlONContent(..), AlONHostT(unAlONHostT)
+    AlONT(unAlON), AlON, MonadAlON(..), AnyContent(..), AlONContent(..)
   ) where
 
 import           Control.Monad.Reader
@@ -11,7 +11,6 @@ import           Data.ByteString.Lazy (ByteString)
 import           Data.Dependent.Sum (DSum)
 import           Data.Functor.Identity
 import           Data.Text (Text)
-import           Data.Kind (Type)
 import qualified Network.HTTP.Types as HTTP
 import           Reflex
 --import           Reflex.Filesystem.DirTree
@@ -39,9 +38,6 @@ newtype AlONT t m a =
     AlON { unAlON :: (ReaderT (STMEQueue (DSum (EventTrigger t) Identity)) (DynamicWriterT t [Text] m)) a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadFix, DynamicWriter t [Text])
 
-newtype AlONHostT t (m :: Type -> Type) a = AlONHostT {
-  unAlONHostT :: DynamicWriterT t [Text] (PerformEventT t m) a
-} deriving (Functor, Applicative, Monad, MonadFix, DynamicWriter t [Text])
 
 instance MonadTrans (AlONT t ) where
   lift = AlON . lift . lift

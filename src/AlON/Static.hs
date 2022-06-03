@@ -23,7 +23,7 @@ import AlON
 -- | Build a static site bundle, streaming the result as
 -- TAR file chunks
 staticizeSite :: HandleErrors
-              -> (forall t m. SimpleAlONSite t m) 
+              -> AlONSite
               -> ProcessT IO LBS.ByteString Void
               -> IO ()
 staticizeSite handleErrors site tarSink = do
@@ -32,7 +32,7 @@ staticizeSite handleErrors site tarSink = do
     startSite siteContent = do
       runT_ $ entrySource siteContent ~> writeTarEntries ~> tarSink
       putMVar siteStarted ()
-  initSimpleAlON site startSite
+  initSite handleErrors startSite site
   readMVar siteStarted
   where
     entrySource siteContent =
