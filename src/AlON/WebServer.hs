@@ -42,7 +42,7 @@ runWarp :: Warp.Settings -> AlONSite -> IO ()
 runWarp settings site = do
   siteState <- newTVarIO (SS mempty mempty)
   let startSite is = do
-        print is
+        print $ T.intercalate "/" . fst <$> LT.toList is
         cm <- mapM (const newTChanIO) is
         atomically . writeTVar siteState $ SS is cm
         -- fire off warp
@@ -61,7 +61,7 @@ runWarp settings site = do
                 mk $ contentResponse d
               _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
   let upSite ups = do
-       print ups
+       print $ T.intercalate "/" . fst <$> ups
        atomically $ do
         i' <- readTVar siteState
         inxt <- (\a -> foldM a i' ups) $ \ i (fp, md) -> do

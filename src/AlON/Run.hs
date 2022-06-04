@@ -92,6 +92,7 @@ runSite herr setup up frm =
     events <- liftIO newChan
     eq <- newSTMEQueue
     (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+
     ((siteRes, errD), FireCommand fire) <-
       hostPerformEventT $
         runDynamicWriterT $
@@ -99,8 +100,8 @@ runSite herr setup up frm =
             flip runTriggerEventT events $
               flip runReaderT eq frm 
 
-    pre <- waitEQ eq ReturnImmediate
     _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
+    pre <- waitEQ eq ReturnImmediate
     _ <- fire pre $ pure ()
     fstate <- (sample . current $ siteRes) >>= mapM (sample . current)
     errs' <- sample . current $ errD
