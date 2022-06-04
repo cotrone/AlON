@@ -19,13 +19,18 @@ import Reflex
 import Reflex.Host.Class
 import Data.Functor.Misc
 import Data.Functor.Identity
-import Data.Dependent.Sum (DSum((:=>)))
+import Data.Dependent.Sum (DSum((:=>)), (==>))
 import qualified Data.Dependent.Map as DMap
 import Control.Monad.Loops
 import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
 import Control.Monad.Ref
+
+import Data.Foldable (for_)
+import Data.IORef (readIORef)
+import Data.Maybe (catMaybes)
+import Data.Traversable (for)
 
 type UpdateSite = [([Text], Maybe AnyContent)] -> IO ()
 
@@ -93,7 +98,7 @@ runSite herr setup up frm =
     eq <- newSTMEQueue
     (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
-    ((siteRes, errD), FireCommand fire) <-
+    ((siteRes, errD), fc@(FireCommand fire)) <-
       hostPerformEventT $
         runDynamicWriterT $
           flip runPostBuildT postBuild $
@@ -133,7 +138,9 @@ runSite herr setup up frm =
       startTime <- liftIO getCurrentTime
 
       pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
-      ec::[([Text], Maybe AnyContent)] <- fmap concat $ fire [] $ do
+
+      ers <- liftIO $ readChan events
+      ec::[([Text], Maybe AnyContent)] <- fmap concat $ fireEventTriggerRefs fc ers $ do
         mchange <- readEvent pageChangeHandle
         changes <- maybe (return mempty) id mchange
         return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
@@ -162,3 +169,18 @@ runSite herr setup up frm =
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
 
       return (newMapping, newPages)
+  where
+    fireEventTriggerRefs
+      :: MonadIO m
+      => FireCommand t m
+      -> [DSum (EventTriggerRef t) TriggerInvocation]
+      -> ReadPhase m a
+      -> m [a]
+    fireEventTriggerRefs (FireCommand fire) ers rcb = do
+      mes <- liftIO $
+        for ers $ \(EventTriggerRef er :=> TriggerInvocation a _) -> do
+          me <- readIORef er
+          pure $ fmap (==> a) me
+      a <- fire (catMaybes mes) rcb
+      liftIO $ for_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
+      pure a
