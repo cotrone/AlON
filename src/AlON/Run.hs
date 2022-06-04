@@ -26,6 +26,7 @@ import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
 import Control.Monad.Ref
+import Safe (lastMay)
 
 import Data.Foldable (for_)
 import Data.IORef (readIORef)
@@ -136,11 +137,12 @@ runSite herr setup up frm =
     -- Read the new events
     -- es <- waitEQ eq RequireEvent
   forever $ do
-    startTime <- liftIO getCurrentTime
 
     ers <- liftIO $ readChan events
-    ec :: [DirTree (Dynamic t AnyContent)] <- fireEventTriggerRefs fc ers $ sample $ current siteRes
-    dynRes <- mapM (mapM (sample . current)) ec
+    startTime <- liftIO getCurrentTime
+    newSiteUpdate <- subscribeEvent $ updated siteRes
+    ec :: [Maybe (DirTree (Dynamic t AnyContent))] <- fireEventTriggerRefs fc ers $ sequence =<< readEvent newSiteUpdate
+    dynRes <- mapM (mapM (sample . current)) $ catMaybes ec
 
     -- let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
     -- added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
@@ -157,7 +159,7 @@ runSite herr setup up frm =
 
     -- Take the resulting actions, logging the errors and updating the site.
     liftIO . herr $ errs
-    mapM (liftIO . setup) dynRes
+    maybe (pure ()) (liftIO . setup) $ lastMay dynRes
 
     -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
     -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)

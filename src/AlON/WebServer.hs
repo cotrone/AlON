@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes, FlexibleContexts, OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module AlON.WebServer (
-    runWarp
+    runWarp, runWarp'
   ) where
 
 import Data.Maybe
@@ -60,6 +60,48 @@ runWarp settings site = do
               Just (d, _) | ("GET" == WAI.requestMethod r) ->
                 mk $ contentResponse d
               _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
+  let upSite ups = do
+       print $ T.intercalate "/" . fst <$> ups
+       atomically $ do
+        i' <- readTVar siteState
+        inxt <- (\a -> foldM a i' ups) $ \ i (fp, md) -> do
+           case md of
+             Nothing -> do
+                     maybe (return ()) (flip writeTChan CloseEvent) . LT.lookup fp . ssEvents $ i
+                     return $ SS (LT.delete fp . sContent $ i) (LT.delete fp . ssEvents $ i)
+             Just d -> do
+                     c <- maybe newTChan return . LT.lookup fp . ssEvents $ i
+                     let h = Crypto.hash (alonContentBody d)::Skein_1024_1024
+                     writeTChan c $
+                       ServerEvent (Just . fromText $ "update")
+                                   (Just . fromByteString . B16.encode . S.encode $ h)
+                                   []
+                     return $ SS (LT.insert' fp d . sContent $  i) (LT.insert fp c . ssEvents $ i)
+        writeTVar siteState inxt
+  runSite (TIO.putStrLn . T.intercalate "\n") startSite upSite site
+
+runWarp' :: Warp.Settings -> AlONSite -> IO ()
+runWarp' settings site = do
+  siteState <- newTVarIO (SS mempty mempty)
+  void . forkIO . Warp.runSettings settings .
+          cors (const . Just $ CorsResourcePolicy Nothing ["GET"] ["Accept"] Nothing Nothing False False True) $
+          \r mk -> do
+            ss <- atomically . readTVar $ siteState
+            let lkUp = LT.lookup (WAI.pathInfo r)
+            case (,) <$> (lkUp . sContent $ ss) <*> (lkUp . ssEvents $ ss) of
+              Nothing -> mk . WAI.responseBuilder HTTP.notFound404 [] . fromText $ "Not found"
+              Just (_, c) | ("GET" == WAI.requestMethod r) &&
+                            (fromMaybe False . fmap (elem "text/event-stream" . T.splitOn ", " . TE.decodeUtf8) . lookup HTTP.hAccept . WAI.requestHeaders $ r) -> do
+                cc <- atomically . cloneTChan $ c
+                eventSourceAppIO (atomically . readTChan $ cc) r mk
+              Just (d, _) | ("GET" == WAI.requestMethod r) ->
+                mk $ contentResponse d
+              _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
+  let startSite is = do
+        print $ T.intercalate "/" . fst <$> LT.toList is
+        cm <- mapM (const newTChanIO) is
+        atomically . writeTVar siteState $ SS is cm
+        -- fire off warp
   let upSite ups = do
        print $ T.intercalate "/" . fst <$> ups
        atomically $ do

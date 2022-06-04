@@ -34,7 +34,7 @@ main = do
   withFile "gallery.tar" ReadWriteMode $ \tarHandle -> do
     staticizeSite (TI.putStrLn . T.intercalate "\n") frm (writeToHandle tarHandle)
   putStrLn "Static site created"
-  runWarp defaultSettings frm
+  runWarp' defaultSettings frm
 
 frm :: AlONSite 
 frm = do
@@ -42,7 +42,6 @@ frm = do
   performEvent $ (liftIO $ putStrLn "build fired") <$ postBuild
   gFp <- holdDyn "gallery" ("gallery" <$ postBuild)
   dir <- dirSource gFp
-  performEvent $ liftIO . print <$> dirUpdates  dir
   let dt = apply2DynDirTree AnyContent . staticize $ apply2DynDirTree BL.fromStrict dir
   let gp = do
         contentTree <- dt
@@ -54,8 +53,3 @@ frm = do
                 HTML5.li $ do
                   HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
   pure $ mergeDynTree dt (constDyn $ LT.singleton [] gp)
-
-dirUpdates :: Reflex t => DynDirTree t a -> Event t (DirTree a)
-dirUpdates dynDir = updated $ do
-  content <- dynDir
-  fmap LT.fromList $ mapM (\(p, c) -> (,) p <$> c) $ LT.toList content
