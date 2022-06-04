@@ -42,6 +42,7 @@ type EQueueT t = STMEQueue (DSum (EventTrigger t) Identity)
 
 type MonadAlON' t m = 
   ( Adjustable t m
+  , DynamicWriter t [Text] m
   , MonadFix m
   , MonadHold t m
   , MonadIO (HostFrame t)
@@ -71,10 +72,10 @@ initSite herr setup frm =
     (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
     ((siteRes, errD), FireCommand fire) <-
       hostPerformEventT $
-        runDynamicWriterT $
           flip runPostBuildT postBuild $
             flip runTriggerEventT events $
-              flip runReaderT eq frm 
+              flip runReaderT eq $
+                runDynamicWriterT frm 
 
     pre <- waitEQ eq ReturnImmediate
     _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
@@ -100,10 +101,10 @@ runSite herr setup up frm =
 
     ((siteRes, errD), fc@(FireCommand fire)) <-
       hostPerformEventT $
-        runDynamicWriterT $
           flip runPostBuildT postBuild $
             flip runTriggerEventT events $
-              flip runReaderT eq frm 
+              flip runReaderT eq
+              $ runDynamicWriterT frm 
 
     _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
     pre <- waitEQ eq ReturnImmediate
