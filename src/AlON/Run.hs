@@ -104,8 +104,8 @@ runSite herr setup up frm =
     hostPerformEventT $
         flip runPostBuildT postBuild $
           flip runTriggerEventT events $
-            flip runReaderT eq
-            $ runDynamicWriterT frm 
+            flip runReaderT eq $
+              runDynamicWriterT frm 
 
   _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
   pre <- waitEQ eq ReturnImmediate
@@ -141,10 +141,12 @@ runSite herr setup up frm =
     ers <- liftIO $ readChan events
     startTime <- liftIO getCurrentTime
     newSiteUpdate <- subscribeEvent $ updated siteRes
-    ec :: [Maybe (DirTree (Dynamic t AnyContent))] <- fireEventTriggerRefs fc ers $ sequence =<< readEvent newSiteUpdate
-    dynRes <- mapM (mapM (sample . current)) $ catMaybes ec
+    ec <- fireEventTriggerRefs fc ers $ sequence =<< readEvent newSiteUpdate
+    let
+      res = lastMay $ catMaybes ec
+    maybe (pure ()) ((liftIO . setup) <=< mapM (sample . current)) res
 
-    -- let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
+    -- let addedDyn = LT.toList . LT.difference newMapping $ lastMapping
     -- added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
     -- let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
 
@@ -159,7 +161,6 @@ runSite herr setup up frm =
 
     -- Take the resulting actions, logging the errors and updating the site.
     liftIO . herr $ errs
-    maybe (pure ()) (liftIO . setup) $ lastMay dynRes
 
     -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
     -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)

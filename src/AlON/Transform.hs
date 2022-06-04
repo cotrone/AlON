@@ -6,6 +6,7 @@ module AlON.Transform (
   , parseYamlHeaded
   , cacheTemplates
   , render
+  , render'
   ) where
 
 import           AlON.Manipulation
@@ -141,6 +142,20 @@ render nm t v = do
     let (errorResults, r) = splitDynPure $ applyTemplate <$> t <*> v
     tellDyn errorResults
     pure r
+  where
+    applyTemplate :: TemplateCache -> k -> ([Text], Text)
+    applyTemplate tc actV =
+     case HM.lookup (T.unpack nm) tc of
+       Nothing -> (["Couldn't find template " `T.append` nm], mempty)
+       Just tmpl -> (first $ map $ ((nm <> ": ") <>) . T.pack . show) . checkedSubstitute tmpl $ actV
+
+render' :: forall k t
+        . (ToMustache k, Reflex t)
+        => Text
+        -> Dynamic t TemplateCache
+        -> Dynamic t k
+        -> Dynamic t ([Text], Text)
+render' nm template v = applyTemplate <$> template <*> v
   where
     applyTemplate :: TemplateCache -> k -> ([Text], Text)
     applyTemplate tc actV =
