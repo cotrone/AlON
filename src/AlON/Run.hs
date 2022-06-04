@@ -128,12 +128,12 @@ runSite herr setup up frm =
     (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
 
       -- Read the new events
-      es <- waitEQ eq RequireEvent
+      -- es <- waitEQ eq RequireEvent
 
       startTime <- liftIO getCurrentTime
 
       pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
-      ec::[([Text], Maybe AnyContent)] <- fmap concat $ fire es $ do
+      ec::[([Text], Maybe AnyContent)] <- fmap concat $ fire [] $ do
         mchange <- readEvent pageChangeHandle
         changes <- maybe (return mempty) id mchange
         return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
