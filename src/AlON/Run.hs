@@ -52,6 +52,7 @@ type MonadAlON' t m =
   , MonadReader (EQueueT t) m
   , MonadRef (HostFrame t)
   , MonadSubscribeEvent t (HostFrame t)
+  , NotReady t m
   , PerformEvent t m
   , PostBuild t m
   , ReflexHost t
@@ -134,6 +135,8 @@ runSite herr setup up frm =
   -- let existingPages'::DMap.DMap (Const2 [Text] AnyContent) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
   -- (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
 
+
+  -- TODO there needs to be a way to read from the two event sources
     -- Read the new events
     -- es <- waitEQ eq RequireEvent
   forever $ do

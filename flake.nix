@@ -17,9 +17,14 @@
               compiler-nix-name = "ghc922";
               # This is used by `nix develop .` to open a shell for use with
               # `cabal`, `hlint` and `haskell-language-server`
-              shell.tools = {
-                cabal = {};
-                ghcid = {};
+              shell = {
+                tools = {
+                  cabal = {};
+                  ghcid = {};
+                  hoogle = {};
+                };
+                withHoogle = true;
+                packages = p: [ p.AlON ];
               };
               # Non-Haskell shell tools go here
               shell.buildInputs = with pkgs; [
