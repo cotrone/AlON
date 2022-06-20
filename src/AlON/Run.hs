@@ -172,12 +172,14 @@ runSite herr setup up frm =
       startTime <- liftIO getCurrentTime
       ec :: [([Text], Maybe AnyContent)] <- case next of
         EQueueTriggers es -> do
+          liftIO $ putStrLn "Running equeue triggers"
           pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
           fmap concat $ fire es $ do
             mchange <- readEvent pageChangeHandle
             changes <- maybe (return mempty) id mchange
             return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
         PerformEventTriggers ev -> do
+          liftIO $ putStrLn "Running PerformEvent triggers"
           pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
           fmap concat $ fireEventTriggerRefs fc ev $ do
             mchange <- readEvent pageChangeHandle
