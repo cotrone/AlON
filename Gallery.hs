@@ -34,7 +34,7 @@ main = do
   withFile "gallery.tar" ReadWriteMode $ \tarHandle -> do
     staticizeSite (TI.putStrLn . T.intercalate "\n") frm (writeToHandle tarHandle)
   putStrLn "Static site created"
-  runWarp' defaultSettings frm
+  runWarp defaultSettings frm
 
 frm :: AlONSite 
 frm = do
@@ -52,4 +52,4 @@ frm = do
               HTML5.ul . forM_ (fst <$> LT.toList contentTree) $ \imgPath -> do
                 HTML5.li $ do
                   HTML5.img HTML5.! HTML5A.src (HTML5.toValue $ "/" <> T.intercalate "/" imgPath)
-  pure $ mergeDynTree dt (constDyn $ LT.singleton [] gp)
+  pure $ AlONSiteResult (mergeDynTree dt (constDyn $ LT.singleton [] gp)) (pure True)

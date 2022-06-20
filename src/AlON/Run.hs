@@ -197,7 +197,7 @@ runSite herr setup up frm =
       let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
       modified <- modifiedDynDirTree lastMapping newMapping
       -- update the existing page watch so we know about changes to internal pages.
-      let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) formerExistingPages $ addedDyn
+      let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated v) m) formerExistingPages $ addedDyn
       -- let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modified
       let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
       
@@ -215,6 +215,7 @@ runSite herr setup up frm =
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
       -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Modified"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) modified)
 
+      _ <- subscribeEvent . merge $ newPages
       return (newMapping, newPages)
   where
     fireEventTriggerRefs
