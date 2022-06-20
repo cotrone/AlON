@@ -196,11 +196,12 @@ runSite herr setup up frm =
       let addedDyn = LT.toList . LT.difference newMapping $ lastMapping
       added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
       let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
-      modified <- modifiedDynDirTree lastMapping newMapping
+      modifiedDyn <- modifiedDynDirTree lastMapping newMapping
+      modified <-  (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) modifiedDyn) 
       -- update the existing page watch so we know about changes to internal pages.
       let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated v) m) formerExistingPages $ addedDyn
-      -- let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modified
-      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
+      let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modifiedDyn
+      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withModified $ removed
       
       errs <- sample . current $ errD
 
@@ -209,7 +210,7 @@ runSite herr setup up frm =
 
       -- Take the resulting actions, logging the errors and updating the site.
       liftIO . herr $ errs
-      liftIO . up $ ec++added++removed
+      liftIO . up $ ec++added++removed++modified
 
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
@@ -243,7 +244,7 @@ listKeys = fmap f . DMap.toList
 modifiedDynDirTree :: forall t m. (Reflex t, MonadSample t m)
                    => DirTree (Dynamic t AnyContent)
                    -> DirTree (Dynamic t AnyContent)
-                   -> m [([T.Text], AnyContent)]
+                   -> m [([T.Text], Dynamic t AnyContent)]
 modifiedDynDirTree old new =
   fmap catMaybes $ mapM (\(t, r) -> fmap (t,) <$> r) $ LT.toList $ LT.intersectionWith f old new
   where
@@ -252,5 +253,5 @@ modifiedDynDirTree old new =
       n <- sample $ current n'
       if contentPieces o == contentPieces n
         then pure Nothing
-        else pure $ Just n
+        else pure $ Just n'
     contentPieces c = (alonContentStatus c, alonContentHeaders c, alonContentBody c)
