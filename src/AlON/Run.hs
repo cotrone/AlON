@@ -1,10 +1,11 @@
 {-# LANGUAGE KindSignatures, OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, TypeFamilies #-}
-{-# LANGUAGE LambdaCase, ConstraintKinds #-}
+{-# LANGUAGE LambdaCase, ConstraintKinds, TupleSections #-}
 module AlON.Run (
     AlONSite, AlONSiteResult(..), HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
   , initSite, runSite
   ) where
-
+import AlON.Types
+import AlON.Source
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.Chan
@@ -13,8 +14,6 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad.Trans
 import Control.Monad.Reader
-import AlON.Types
-import AlON.Source
 import Data.Time
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -195,13 +194,14 @@ runSite herr setup up frm =
       liftIO $ print ec
       newMapping <- sample . current $ alonSiteContent siteRes
 
-      let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
+      let addedDyn = LT.toList . LT.difference newMapping $ lastMapping
       added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
       let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
-
+      modified <- modifiedDynDirTree lastMapping newMapping
       -- update the existing page watch so we know about changes to internal pages.
       let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) formerExistingPages $ addedDyn
-      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
+      let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modified
+      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withModified $ removed
       
       errs <- sample . current $ errD
 
@@ -232,3 +232,18 @@ runSite herr setup up frm =
       a <- fire (catMaybes mes) rcb
       liftIO $ for_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
       pure a
+
+modifiedDynDirTree :: forall t m. (Reflex t, MonadSample t m)
+                   => DirTree (Dynamic t AnyContent)
+                   -> DirTree (Dynamic t AnyContent)
+                   -> m [([T.Text], Dynamic t AnyContent)]
+modifiedDynDirTree old new =
+  fmap catMaybes $ mapM (\(t, r) -> fmap (t,) <$> r) $ LT.toList $ LT.intersectionWith f old new
+  where
+    f o' n' = do
+      o <- sample $ current o'
+      n <- sample $ current n'
+      if contentPieces o == contentPieces n
+        then pure Nothing
+        else pure $ Just n'
+    contentPieces c = (alonContentStatus c, alonContentHeaders c, alonContentBody c)

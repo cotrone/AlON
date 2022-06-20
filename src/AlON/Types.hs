@@ -22,7 +22,7 @@ class AlONContent a where
   alonContentBody    :: a -> ByteString
 
 data AnyContent
-  = forall a. (AlONContent a, Show a) => AnyContent a
+  = forall a. (AlONContent a, Show a, Eq a) => AnyContent a
 
 deriving instance Show AnyContent
 
