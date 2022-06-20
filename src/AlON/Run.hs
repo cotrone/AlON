@@ -166,7 +166,6 @@ runSite herr setup up frm =
               
 
     (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
-      _ <- liftIO $ mapM print $ listKeys formerExistingPages
       pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
       next <- liftIO readStep
       startTime <- liftIO getCurrentTime
@@ -196,8 +195,13 @@ runSite herr setup up frm =
       let addedDyn = LT.toList . LT.difference newMapping $ lastMapping
       added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
       let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
+
+      -- For some reason the event for modified pages isn't being read
+      -- so this hack just compares the entire tree and see what's already there
+      -- and has changed
       modifiedDyn <- modifiedDynDirTree lastMapping newMapping
-      modified <-  (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) modifiedDyn) 
+      modified <-  (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) modifiedDyn)
+
       -- update the existing page watch so we know about changes to internal pages.
       let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated v) m) formerExistingPages $ addedDyn
       let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modifiedDyn
@@ -212,9 +216,9 @@ runSite herr setup up frm =
       liftIO . herr $ errs
       liftIO . up $ ec++added++removed++modified
 
-      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
-      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
-      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
+      -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
+      -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
+      -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
       -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Modified"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) modified)
 
       return (newMapping, newPages)
@@ -233,13 +237,6 @@ runSite herr setup up frm =
       a <- fire (catMaybes mes) rcb
       liftIO $ for_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
       pure a
-
-
-listKeys :: DMap.DMap (Const2 [Text] AnyContent) (Event Spider) -> [[Text]]
-listKeys = fmap f . DMap.toList
-  where
-    f :: DSum (Const2 [Text] AnyContent) (Event Spider) -> [Text]
-    f (Const2 ts :=> _) = ts
 
 modifiedDynDirTree :: forall t m. (Reflex t, MonadSample t m)
                    => DirTree (Dynamic t AnyContent)
