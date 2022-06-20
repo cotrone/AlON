@@ -166,20 +166,18 @@ runSite herr setup up frm =
               
 
     (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
-
+      pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
       next <- liftIO readStep
       startTime <- liftIO getCurrentTime
       ec :: [([Text], Maybe AnyContent)] <- case next of
         EQueueTriggers es -> do
           liftIO $ putStrLn "Running equeue triggers"
-          pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
           fmap concat $ fire es $ do
             mchange <- readEvent pageChangeHandle
             changes <- maybe (return mempty) id mchange
             return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
         PerformEventTriggers ev -> do
           liftIO $ putStrLn "Running PerformEvent triggers"
-          pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
           fmap concat $ fireEventTriggerRefs fc ev $ do
             mchange <- readEvent pageChangeHandle
             changes <- maybe (return mempty) id mchange
@@ -200,8 +198,8 @@ runSite herr setup up frm =
       modified <- modifiedDynDirTree lastMapping newMapping
       -- update the existing page watch so we know about changes to internal pages.
       let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) formerExistingPages $ addedDyn
-      let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modified
-      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withModified $ removed
+      -- let withModified = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) withAdded $ modified
+      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
       
       errs <- sample . current $ errD
 
@@ -215,7 +213,7 @@ runSite herr setup up frm =
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
-      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Modified"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) modified)
+      -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Modified"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) modified)
 
       return (newMapping, newPages)
   where
@@ -237,7 +235,7 @@ runSite herr setup up frm =
 modifiedDynDirTree :: forall t m. (Reflex t, MonadSample t m)
                    => DirTree (Dynamic t AnyContent)
                    -> DirTree (Dynamic t AnyContent)
-                   -> m [([T.Text], Dynamic t AnyContent)]
+                   -> m [([T.Text], AnyContent)]
 modifiedDynDirTree old new =
   fmap catMaybes $ mapM (\(t, r) -> fmap (t,) <$> r) $ LT.toList $ LT.intersectionWith f old new
   where
@@ -246,5 +244,5 @@ modifiedDynDirTree old new =
       n <- sample $ current n'
       if contentPieces o == contentPieces n
         then pure Nothing
-        else pure $ Just n'
+        else pure $ Just n
     contentPieces c = (alonContentStatus c, alonContentHeaders c, alonContentBody c)
