@@ -166,6 +166,7 @@ runSite herr setup up frm =
               
 
     (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
+      _ <- liftIO $ mapM print $ listKeys formerExistingPages
       pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
       next <- liftIO readStep
       startTime <- liftIO getCurrentTime
@@ -215,7 +216,6 @@ runSite herr setup up frm =
       liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
       -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Modified"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) modified)
 
-      _ <- subscribeEvent . merge $ newPages
       return (newMapping, newPages)
   where
     fireEventTriggerRefs
@@ -232,6 +232,13 @@ runSite herr setup up frm =
       a <- fire (catMaybes mes) rcb
       liftIO $ for_ ers $ \(_ :=> TriggerInvocation _ cb) -> cb
       pure a
+
+
+listKeys :: DMap.DMap (Const2 [Text] AnyContent) (Event Spider) -> [[Text]]
+listKeys = fmap f . DMap.toList
+  where
+    f :: DSum (Const2 [Text] AnyContent) (Event Spider) -> [Text]
+    f (Const2 ts :=> _) = ts
 
 modifiedDynDirTree :: forall t m. (Reflex t, MonadSample t m)
                    => DirTree (Dynamic t AnyContent)
