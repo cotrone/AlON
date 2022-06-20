@@ -98,12 +98,10 @@ runWarp' settings site = do
                 mk $ contentResponse d
               _ -> mk . WAI.responseBuilder HTTP.methodNotAllowed405 [] . fromText $ "GET only"
   let startSite is = do
-        print $ T.intercalate "/" . fst <$> LT.toList is
         cm <- mapM (const newTChanIO) is
         atomically . writeTVar siteState $ SS is cm
         -- fire off warp
   let upSite ups = do
-       print $ T.intercalate "/" . fst <$> ups
        atomically $ do
         i' <- readTVar siteState
         inxt <- (\a -> foldM a i' ups) $ \ i (fp, md) -> do
