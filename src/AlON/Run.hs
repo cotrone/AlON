@@ -192,13 +192,8 @@ runSite herr setup up frm =
           liftIO $ putStrLn $ "PerformEvent thread exited: " <> exitReason exit
           pure []
 
-
+      liftIO $ print ec
       newMapping <- sample . current $ alonSiteContent siteRes
-
-      -- ers <- liftIO $ readChan events
-      -- startTime <- liftIO getCurrentTime
-      -- newSiteUpdate <- subscribeEvent $ updated $ alonSiteContent siteRes
-      -- ec <- fireEventTriggerRefs fc ers $ sequence =<< readEvent newSiteUpdate
 
       let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
       added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
