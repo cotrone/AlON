@@ -1,12 +1,16 @@
 {-# LANGUAGE KindSignatures, OverloadedStrings, RankNTypes, FlexibleContexts, ScopedTypeVariables, TypeFamilies #-}
 {-# LANGUAGE LambdaCase, ConstraintKinds #-}
 module AlON.Run (
-    AlONSite, HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
+    AlONSite, AlONSiteResult(..), HandleErrors, UpdateSite, SetupSite, AlONContent(..), AnyContent
   , initSite, runSite
   ) where
 
+import Control.Applicative
+import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Concurrent.EQueue
+import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad.Trans
 import Control.Monad.Reader
 import AlON.Types
@@ -26,7 +30,6 @@ import qualified Data.ListTrie.Patricia.Map.Ord as LT
 import Data.Text (Text)
 import Data.List
 import Control.Monad.Ref
-import Safe (lastMay)
 
 import Data.Foldable (for_)
 import Data.IORef (readIORef)
@@ -60,7 +63,12 @@ type MonadAlON' t m =
   , TriggerEvent t m
   )
 
-type AlONSite = forall t m. MonadAlON' t m => m (DynDirTree t AnyContent)
+type AlONSite = forall t m. MonadAlON' t m => m (AlONSiteResult t)
+
+data AlONSiteResult t = AlONSiteResult {
+  alonSiteContent :: DynDirTree t AnyContent
+, alonSiteReady :: Dynamic t Bool
+}
 
 getConName :: Typeable a => a -> Text
 getConName = T.pack . tyConName . typeRepTyCon . typeOf
@@ -82,94 +90,136 @@ initSite herr setup frm =
     pre <- waitEQ eq ReturnImmediate
     _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
     _ <- fire pre $ pure ()
-    fstate <- (sample . current $ siteRes) >>= mapM (sample . current)
+    fstate <- (sample . current $ (alonSiteContent siteRes)) >>= mapM (sample . current)
     errs' <- sample . current $ errD
     liftIO . herr $ errs'
     liftIO . setup $ fstate
     finishedTime' <- liftIO getCurrentTime
     liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
 
+data RunSiteStep t =
+    EQueueTriggers [DSum (EventTrigger t) Identity]
+  | PerformEventTriggers [DSum (EventTriggerRef t) TriggerInvocation]
+  | EQueueThreadExited (Either SomeException ())
+  | PerformEventThreadExited (Either SomeException ())
 
--- | This is just the initialization step of runSite
--- Just copied over and not reused because the error dynamic from initialization
--- need to be sampled for updates
+exitReason :: Either SomeException () -> String
+exitReason (Left ex) = "Exception: " <> show ex
+exitReason (Right ()) = "Graceful"
+
 runSite :: HandleErrors -> SetupSite -> UpdateSite -> AlONSite -> IO ()
-runSite herr setup up frm = 
- runSpiderHost $ do
-  startTime' <- liftIO getCurrentTime
-  events <- liftIO newChan
-  eq <- newSTMEQueue
-  (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+runSite herr setup up frm =
+  runSpiderHost $ do
+    startTime' <- liftIO getCurrentTime
 
-  ((siteRes, errD), fc@(FireCommand fire)) <-
-    hostPerformEventT $
-        flip runPostBuildT postBuild $
-          flip runTriggerEventT events $
-            flip runReaderT eq $
-              runDynamicWriterT frm 
+    events <- liftIO newChan
+    eq <- newSTMEQueue
 
-  _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
-  pre <- waitEQ eq ReturnImmediate
-  _ <- fire pre $ pure ()
-  fstate <- (sample . current $ siteRes) >>= mapM (sample . current)
-  errs' <- sample . current $ errD
-  liftIO . herr $ errs'
-  liftIO . setup $ fstate
-  finishedTime' <- liftIO getCurrentTime
-  liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
+    (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
-  {- Ok, this gets a bit complicated.
-  -
-  - So, we can't look inside the tree when we read events.
-  - So we read the state of the tree, and save that.
-  - Use it to generate a list of things to also listen to for events.
-  - Listen for changes in the tree, which captures any *pre existing*
-  - events that change their value.
-  - But, it *misses* events of elements that are deleted, or elements that are added.
-  - So after the update we read the tree *again* and do tree subtraction in *both* directions.
-  - Anything left from removing the old tree from the new is a new entry.
-  - Anything left from removing the new tree from the old is a deleted entry.
-  - And, since they can't be in the events we got from the update, we know there is no overlap.
-  -}
-  -- initialMapping <- sample . current $ siteRes
-  -- let existingPages'::DMap.DMap (Const2 [Text] AnyContent) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
-  -- (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
+    ((siteRes, errD), fc@(FireCommand fire)) <-
+      hostPerformEventT $
+          flip runPostBuildT postBuild $
+            flip runTriggerEventT events $
+              flip runReaderT eq $
+                runDynamicWriterT frm 
 
+    _ <- maybe (pure ()) (\t -> void . fire [t :=> Identity ()] $ pure ()) =<< readRef postBuildTriggerRef
 
-  -- TODO there needs to be a way to read from the two event sources
-    -- Read the new events
-    -- es <- waitEQ eq RequireEvent
-  forever $ do
+    pre <- waitEQ eq ReturnImmediate
+    fireEvents pre
+    fstate <- (sample . current $ alonSiteContent siteRes) >>= mapM (sample . current)
+    errs' <- sample . current $ errD
+    liftIO . herr $ errs'
+    liftIO . setup $ fstate
+    finishedTime' <- liftIO getCurrentTime
+    liftIO . putStrLn $ ("Setup ("++(show $ finishedTime' `diffUTCTime` startTime')++")")
 
-    ers <- liftIO $ readChan events
-    startTime <- liftIO getCurrentTime
-    newSiteUpdate <- subscribeEvent $ updated siteRes
-    ec <- fireEventTriggerRefs fc ers $ sequence =<< readEvent newSiteUpdate
-    let
-      res = lastMay $ catMaybes ec
-    maybe (pure ()) ((liftIO . setup) <=< mapM (sample . current)) res
-
-    -- let addedDyn = LT.toList . LT.difference newMapping $ lastMapping
-    -- added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
-    -- let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
-
-    -- -- update the existing page watch so we know about changes to internal pages.
-    -- let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) formerExistingPages $ addedDyn
-    -- let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
+    {- Ok, this gets a bit complicated.
+    -
+    - So, we can't look inside the tree when we read events.
+    - So we read the state of the tree, and save that.
+    - Use it to generate a list of things to also listen to for events.
+    - Listen for changes in the tree, which captures any *pre existing*
+    - events that change their value.
+    - But, it *misses* events of elements that are deleted, or elements that are added.
+    - So after the update we read the tree *again* and do tree subtraction in *both* directions.
+    - Anything left from removing the old tree from the new is a new entry.
+    - Anything left from removing the new tree from the old is a deleted entry.
+    - And, since they can't be in the events we got from the update, we know there is no overlap.
+    -}
+    initialMapping <- sample . current $ alonSiteContent siteRes
+    let existingPages'::DMap.DMap (Const2 [Text] AnyContent) (Event Spider) = DMap.fromList . map (\(k, v) -> (Const2 k) :=> (updated $ v)) . LT.toList $ initialMapping
     
-    errs <- sample . current $ errD
+    nextEvent <- liftIO $ atomically $ newEmptyTMVar
 
-    finishedTime <- liftIO getCurrentTime
-    liftIO . putStrLn $ ("Events ("++(show $ finishedTime `diffUTCTime` startTime)++")")
+    equeueThread <- liftIO $ async $ forever $ do
+      es <- waitEQ eq RequireEvent
+      atomically $ putTMVar nextEvent $ EQueueTriggers es
 
-    -- Take the resulting actions, logging the errors and updating the site.
-    liftIO . herr $ errs
+    performEventThread <- liftIO $ async $ forever $ do
+      ev <- readChan events
+      atomically $ putTMVar nextEvent $ PerformEventTriggers ev
+    let readStep = atomically $ 
+              EQueueThreadExited <$> waitCatchSTM equeueThread
+          <|> PerformEventThreadExited <$> waitCatchSTM performEventThread
+          <|> takeTMVar nextEvent
+              
 
-    -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
-    -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
-    -- liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
+    (`iterateM_` (initialMapping, existingPages')) $ \(lastMapping, formerExistingPages) -> do
 
-    pure ()
+      next <- liftIO readStep
+      startTime <- liftIO getCurrentTime
+      ec :: [([Text], Maybe AnyContent)] <- case next of
+        EQueueTriggers es -> do
+          pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
+          fmap concat $ fire es $ do
+            mchange <- readEvent pageChangeHandle
+            changes <- maybe (return mempty) id mchange
+            return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
+        PerformEventTriggers ev -> do
+          pageChangeHandle <- subscribeEvent . merge $ formerExistingPages
+          fmap concat $ fireEventTriggerRefs fc ev $ do
+            mchange <- readEvent pageChangeHandle
+            changes <- maybe (return mempty) id mchange
+            return .  map (\((Const2 k) :=> v) -> (k, Just . runIdentity $ v)) . DMap.toList $ changes
+        EQueueThreadExited exit -> do
+          liftIO $ putStrLn $ "Equeue thread exited: " <> exitReason exit
+          pure []
+        PerformEventThreadExited exit -> do
+          liftIO $ putStrLn $ "PerformEvent thread exited: " <> exitReason exit
+          pure []
+
+
+      newMapping <- sample . current $ alonSiteContent siteRes
+
+      -- ers <- liftIO $ readChan events
+      -- startTime <- liftIO getCurrentTime
+      -- newSiteUpdate <- subscribeEvent $ updated $ alonSiteContent siteRes
+      -- ec <- fireEventTriggerRefs fc ers $ sequence =<< readEvent newSiteUpdate
+
+      let addedDyn   = LT.toList . LT.difference newMapping $ lastMapping
+      added <- (fmap (fmap Just)) <$> (mapM (mapM (sample . current)) addedDyn) 
+      let removed = fmap (fmap $ const Nothing) . LT.toList . LT.difference lastMapping $ newMapping
+
+      -- update the existing page watch so we know about changes to internal pages.
+      let withAdded = foldl (\m (k, v) -> DMap.insert (Const2 k) (updated $ v) m) formerExistingPages $ addedDyn
+      let newPages  =  foldl (\m (k, _) -> DMap.delete (Const2 k) m) withAdded $ removed
+      
+      errs <- sample . current $ errD
+
+      finishedTime <- liftIO getCurrentTime
+      liftIO . putStrLn $ ("Events ("++(show $ finishedTime `diffUTCTime` startTime)++")")
+
+      -- Take the resulting actions, logging the errors and updating the site.
+      liftIO . herr $ errs
+      liftIO . up $ ec++added++removed
+
+      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Added"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) added)
+      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Removed"::T.Text]:(fmap (\(t, _) -> (" - ":t)) removed)
+      liftIO . TIO.putStr . mconcat . map (flip T.append "\n" . mconcat . intersperse "/") $ ["Changed"::T.Text]:(fmap (\(t, v) -> (" - ":t) `mappend` [" : " `T.append` (getConName v)]) ec)
+
+      return (newMapping, newPages)
   where
     fireEventTriggerRefs
       :: MonadIO m
